@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "../utils/supabase";
 
 const { width, height } = Dimensions.get("window");
 
@@ -45,29 +46,81 @@ export default function LupaPasswordScreen() {
     ]).start();
   }, []);
 
-  const handleKirimLink = () => {
-    if (!email) {
-      Alert.alert("Peringatan", "Masukkan email atau nomor HP terlebih dahulu");
+  // ===== KIRIM LINK RESET =====
+  const handleKirimLink = async () => {
+    if (!email.trim()) {
+      Alert.alert("Peringatan", "Masukkan email terlebih dahulu");
+      return;
+    }
+
+    // Validasi format email
+    if (!email.includes("@") || !email.includes(".")) {
+      Alert.alert("Peringatan", "Format email tidak valid");
       return;
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      // Kirim reset password email via Supabase
+      const { data, error } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        {
+          redirectTo: "pinjammasjid://reset-password",
+        },
+      );
+
+      if (error) {
+        let pesanError = "Gagal mengirim link reset. Coba lagi.";
+
+        if (error.message.includes("User not found")) {
+          pesanError = "Email tidak terdaftar. Silakan periksa kembali.";
+        } else if (error.message.includes("rate limit")) {
+          pesanError = "Terlalu banyak percobaan. Coba lagi nanti.";
+        } else if (error.message) {
+          pesanError = error.message;
+        }
+
+        Alert.alert("Gagal", pesanError);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("Reset email terkirim ke:", email);
+
       setIsLoading(false);
       Alert.alert(
         "Link Terkirim! ✅",
-        "Kami akan mengirimkan link untuk mereset kata sandi ke email atau WhatsApp Anda.",
-        [{ text: "OK", onPress: () => router.back() }]
+        `Link reset kata sandi telah dikirim ke ${email}.\n\nSilakan cek inbox email Anda (atau folder spam).`,
+        [
+          {
+            text: "Buka Email",
+            onPress: () => {
+              // Router ke halaman utama
+              router.back();
+            },
+          },
+          {
+            text: "Nanti",
+            style: "cancel",
+            onPress: () => router.back(),
+          },
+        ],
       );
-    }, 1500);
+    } catch (error: any) {
+      console.error("Error reset password:", error);
+      setIsLoading(false);
+      Alert.alert("Gagal", error.message || "Terjadi kesalahan. Coba lagi.");
+    }
   };
 
+  // ===== KIRIM VIA WHATSAPP (Opsional) =====
   const handleKirimWA = () => {
-    if (!email) {
-      Alert.alert("Peringatan", "Masukkan email atau nomor HP terlebih dahulu");
-      return;
-    }
-    Alert.alert("Sukses", "Link reset akan dikirim via WhatsApp!");
+    Alert.alert(
+      "Info",
+      "Fitur reset via WhatsApp belum tersedia. Silakan gunakan email.",
+      [{ text: "OK" }],
+    );
   };
 
   const handlePressIn = () => {
@@ -126,7 +179,8 @@ export default function LupaPasswordScreen() {
             </View>
             <Text style={styles.title}>Lupa Kata Sandi?</Text>
             <Text style={styles.subtitle}>
-              Masukkan email atau nomor HP yang terdaftar pada akun Anda.
+              Masukkan email yang terdaftar pada akun Anda. Kami akan kirimkan
+              link reset password.
             </Text>
           </View>
         </LinearGradient>
@@ -141,21 +195,25 @@ export default function LupaPasswordScreen() {
             },
           ]}
         >
-          {/* Email / No HP */}
+          {/* Email */}
           <View style={styles.inputWrapper}>
-            <Text style={styles.label}>📧 Email atau No HP</Text>
-            <View style={[styles.inputContainer, isFocused && styles.inputFocused]}>
+            <Text style={styles.label}>📧 Email Terdaftar</Text>
+            <View
+              style={[styles.inputContainer, isFocused && styles.inputFocused]}
+            >
               <Ionicons name="mail-outline" size={20} color="#8A8A8A" />
               <TextInput
                 style={styles.input}
-                placeholder="Masukkan email atau no HP"
+                placeholder="contoh@email.com"
                 placeholderTextColor="#B0B0B0"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
+                editable={!isLoading}
               />
             </View>
           </View>
@@ -176,16 +234,24 @@ export default function LupaPasswordScreen() {
                   <Text style={styles.primaryButtonText}>Mengirim...</Text>
                 </View>
               ) : (
-                <Text style={styles.primaryButtonText}>Kirim Link Reset</Text>
+                <>
+                  <Ionicons name="mail" size={20} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>Kirim Link Reset</Text>
+                </>
               )}
             </TouchableOpacity>
           </Animated.View>
 
           {/* Info */}
           <View style={styles.infoContainer}>
-            <Ionicons name="information-circle-outline" size={20} color="#2D7D46" />
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color="#2D7D46"
+            />
             <Text style={styles.infoText}>
-              Kami akan mengirimkan link reset kata sandi ke email atau WhatsApp Anda.
+              Kami akan mengirimkan link reset kata sandi ke email Anda. Cek
+              inbox atau folder spam.
             </Text>
           </View>
 
@@ -196,15 +262,27 @@ export default function LupaPasswordScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Kirim via WhatsApp */}
+          {/* Kirim via WhatsApp (opsional) */}
           <TouchableOpacity
             style={styles.whatsappButton}
             onPress={handleKirimWA}
             activeOpacity={0.8}
           >
             <Ionicons name="logo-whatsapp" size={22} color="#FFFFFF" />
-            <Text style={styles.whatsappButtonText}>Kirim via WhatsApp</Text>
+            <Text style={styles.whatsappButtonText}>Hubungi Admin via WA</Text>
           </TouchableOpacity>
+
+          {/* Tips */}
+          <View style={styles.tipsContainer}>
+            <Text style={styles.tipsTitle}>💡 Tips:</Text>
+            <Text style={styles.tipsText}>
+              • Pastikan email yang dimasukkan benar{"\n"}• Cek folder{" "}
+              <Text style={styles.tipsBold}>Spam</Text> atau{" "}
+              <Text style={styles.tipsBold}>Promotions</Text>
+              {"\n"}• Link reset berlaku 1 jam{"\n"}• Kalau belum terima, tunggu
+              5 menit lalu coba lagi
+            </Text>
+          </View>
         </Animated.View>
 
         {/* Footer */}
@@ -215,15 +293,8 @@ export default function LupaPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 0,
-  },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollContainer: { flexGrow: 1, paddingHorizontal: 20, paddingVertical: 0 },
 
   // ===== HEADER GRADASI =====
   headerGradient: {
@@ -311,9 +382,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginLeft: 6,
   },
-  headerContent: {
-    alignItems: "center",
-  },
+  headerContent: { alignItems: "center" },
   iconCircle: {
     width: 72,
     height: 72,
@@ -352,15 +421,8 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 10,
   },
-  inputWrapper: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
-  },
+  inputWrapper: { marginBottom: 20 },
+  label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 8 },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -375,31 +437,24 @@ const styles = StyleSheet.create({
     borderColor: "#2D7D46",
     borderWidth: 2,
     backgroundColor: "#FFFFFF",
-    shadowColor: "#2D7D46",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#1A1A1A",
-    paddingLeft: 10,
-  },
+  input: { flex: 1, fontSize: 16, color: "#1A1A1A", paddingLeft: 10 },
 
   // ===== TOMBOL PRIMER =====
   primaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#2D7D46",
     paddingVertical: 16,
     borderRadius: 14,
-    alignItems: "center",
     marginBottom: 16,
     shadowColor: "#2D7D46",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 14,
     elevation: 6,
+    gap: 10,
   },
   primaryButtonText: {
     color: "#FFFFFF",
@@ -407,14 +462,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.5,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
+  buttonDisabled: { opacity: 0.6 },
+  loadingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   loadingDot: {
     width: 16,
     height: 16,
@@ -437,12 +486,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: "#2D7D46",
   },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    color: "#555",
-    lineHeight: 20,
-  },
+  infoText: { flex: 1, fontSize: 13, color: "#555", lineHeight: 20 },
 
   // ===== DIVIDER =====
   dividerContainer: {
@@ -450,11 +494,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E8E8E8",
-  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#E8E8E8" },
   dividerText: {
     marginHorizontal: 16,
     color: "#B0B0B0",
@@ -477,11 +517,25 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
-  whatsappButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "600",
+  whatsappButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
+
+  // ===== TIPS =====
+  tipsContainer: {
+    backgroundColor: "#FFF8E1",
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: "#C9A84C",
   },
+  tipsTitle: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#C9A84C",
+    marginBottom: 6,
+  },
+  tipsText: { fontSize: 12, color: "#666", lineHeight: 20 },
+  tipsBold: { fontWeight: "bold", color: "#333" },
 
   // ===== FOOTER =====
   footer: {

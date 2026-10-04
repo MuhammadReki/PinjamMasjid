@@ -1,15 +1,20 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const STORAGE_KEY = "pinjammasjid_barang";
-const EVENT_KEY = "pinjammasjid_acara";
+import { supabase } from "./supabase";
 
 // ===================== BARANG =====================
 
 // ===== AMBIL SEMUA BARANG =====
 export const getItems = async () => {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    const { data, error } = await supabase
+      .from("barang")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error getting items:", error);
+      return [];
+    }
+    return data || [];
   } catch (error) {
     console.error("Error getting items:", error);
     return [];
@@ -19,15 +24,21 @@ export const getItems = async () => {
 // ===== SIMPAN BARANG BARU =====
 export const saveItem = async (item: any) => {
   try {
-    const existingItems = await getItems();
-    const newItem = {
-      ...item,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    const updatedItems = [...existingItems, newItem];
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedItems));
-    return newItem;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from("barang")
+      .insert({
+        ...item,
+        created_by: user?.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   } catch (error) {
     console.error("Error saving item:", error);
     throw error;
@@ -37,9 +48,8 @@ export const saveItem = async (item: any) => {
 // ===== HAPUS BARANG =====
 export const deleteItem = async (id: string) => {
   try {
-    const items = await getItems();
-    const filtered = items.filter((item: any) => item.id !== id);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    const { error } = await supabase.from("barang").delete().eq("id", id);
+    if (error) throw error;
   } catch (error) {
     console.error("Error deleting item:", error);
     throw error;
@@ -51,8 +61,16 @@ export const deleteItem = async (id: string) => {
 // ===== AMBIL SEMUA ACARA =====
 export const getEvents = async () => {
   try {
-    const data = await AsyncStorage.getItem(EVENT_KEY);
-    return data ? JSON.parse(data) : [];
+    const { data, error } = await supabase
+      .from("acara")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error getting events:", error);
+      return [];
+    }
+    return data || [];
   } catch (error) {
     console.error("Error getting events:", error);
     return [];
@@ -62,15 +80,21 @@ export const getEvents = async () => {
 // ===== SIMPAN ACARA BARU =====
 export const saveEvent = async (event: any) => {
   try {
-    const existingEvents = await getEvents();
-    const newEvent = {
-      ...event,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    const updatedEvents = [...existingEvents, newEvent];
-    await AsyncStorage.setItem(EVENT_KEY, JSON.stringify(updatedEvents));
-    return newEvent;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from("acara")
+      .insert({
+        ...event,
+        created_by: user?.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   } catch (error) {
     console.error("Error saving event:", error);
     throw error;
@@ -80,11 +104,63 @@ export const saveEvent = async (event: any) => {
 // ===== HAPUS ACARA =====
 export const deleteEvent = async (id: string) => {
   try {
-    const events = await getEvents();
-    const filtered = events.filter((event: any) => event.id !== id);
-    await AsyncStorage.setItem(EVENT_KEY, JSON.stringify(filtered));
+    const { error } = await supabase.from("acara").delete().eq("id", id);
+    if (error) throw error;
   } catch (error) {
     console.error("Error deleting event:", error);
+    throw error;
+  }
+};
+
+// ===================== PROFIL =====================
+
+// ===== AMBIL PROFIL USER =====
+export const getProfil = async () => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from("profil")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error getting profil:", error);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    console.error("Error getting profil:", error);
+    return null;
+  }
+};
+
+// ===== SIMPAN / UPDATE PROFIL =====
+export const saveProfil = async (profil: any) => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not logged in");
+
+    const { data, error } = await supabase
+      .from("profil")
+      .upsert({
+        id: user.id,
+        ...profil,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error saving profil:", error);
     throw error;
   }
 };

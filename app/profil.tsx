@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Animated,
-  BackHandler,
-  Platform,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -15,12 +15,16 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getProfil } from "../utils/storage";
+import { supabase } from "../utils/supabase";
 
 export default function ProfilScreen() {
   const insets = useSafeAreaInsets();
 
   // ===== STATE =====
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [profil, setProfil] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // ===== ANIMASI =====
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -43,6 +47,37 @@ export default function ProfilScreen() {
     ]).start();
   }, []);
 
+  // ===== LOAD DATA USER & PROFIL =====
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // 1. Ambil user dari Auth
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      console.log("Profil - Auth User:", authUser?.email);
+      setUser(authUser);
+
+      // 2. Ambil profil dari tabel profil
+      if (authUser) {
+        const profilData = await getProfil();
+        console.log("Profil - Data Profil:", profilData);
+        setProfil(profilData);
+      }
+    } catch (error) {
+      console.error("Error loading profile:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
+
   // ===== FUNGSI =====
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -60,37 +95,27 @@ export default function ProfilScreen() {
     }).start();
   };
 
-  // ===== FUNGSI KELUAR APLIKASI =====
-  const handleKeluarAplikasi = () => {
-    // Tampilkan Alert konfirmasi
+  // ===== LOGOUT =====
+  const handleLogout = () => {
     Alert.alert(
-      "Keluar Aplikasi",
-      "Apakah Anda yakin ingin keluar dari aplikasi?",
+      "Keluar Akun",
+      "Apakah Anda yakin ingin keluar dari akun?",
       [
-        {
-          text: "Batal",
-          style: "cancel",
-        },
+        { text: "Batal", style: "cancel" },
         {
           text: "Keluar",
           style: "destructive",
-          onPress: () => {
-            // Cek platform
-            if (Platform.OS === "android") {
-              // Android: keluar dari aplikasi
-              BackHandler.exitApp();
-            } else {
-              // iOS: tidak bisa keluar paksa, beri pesan alternatif
-              Alert.alert(
-                "Informasi",
-                "Di iOS, aplikasi tidak dapat ditutup secara paksa. Silakan tutup aplikasi melalui multitasking.",
-                [{ text: "OK" }]
-              );
+          onPress: async () => {
+            try {
+              await supabase.auth.signOut();
+              router.replace("/");
+            } catch (error) {
+              Alert.alert("Gagal", "Tidak dapat logout. Coba lagi.");
             }
           },
         },
       ],
-      { cancelable: true }
+      { cancelable: true },
     );
   };
 
@@ -132,6 +157,30 @@ export default function ProfilScreen() {
       route: "/tentang",
     },
   ];
+
+  // ===== RENDER HEADER USER =====
+  const getDisplayName = () => {
+    if (profil?.nama) return profil.nama;
+    if (user?.user_metadata?.name) return user.user_metadata.name;
+    if (user?.email) return user.email.split("@")[0];
+    return "Pengguna";
+  };
+
+  const getEmail = () => {
+    return profil?.email || user?.email || "Belum ada email";
+  };
+
+  const getNomorHP = () => {
+    return profil?.nomor_hp || user?.user_metadata?.phone || "Belum ada nomor";
+  };
+
+  const getAlamat = () => {
+    return profil?.alamat || "Belum ada alamat";
+  };
+
+  const getJabatan = () => {
+    return profil?.jabatan || user?.user_metadata?.role || "Anggota";
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -183,20 +232,44 @@ export default function ProfilScreen() {
           >
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
-                <Ionicons name="person" size={56} color="#2D7D46" />
+                {profil?.foto_url ? (
+                  <Image
+                    source={{ uri: profil.foto_url }}
+                    style={{
+                      width: 100,
+                      height: 100,
+                      borderRadius: 50,
+                    }}
+                  />
+                ) : (
+                  <Ionicons name="person" size={56} color="#2D7D46" />
+                )}
               </View>
               <TouchableOpacity
                 style={styles.changePhotoButton}
                 activeOpacity={0.7}
+                onPress={() => router.push("/edit-profil")}
               >
                 <Ionicons name="camera" size={16} color="#FFFFFF" />
                 <Text style={styles.changePhotoText}>Ubah Foto</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.profileName}>Belum ada data profil</Text>
-            <Text style={styles.profileSubtitle}>
-              Data pengguna akan muncul setelah login
-            </Text>
+
+            {isLoading ? (
+              <>
+                <ActivityIndicator
+                  size="small"
+                  color="#2D7D46"
+                  style={{ marginTop: 8 }}
+                />
+                <Text style={styles.profileSubtitle}>Memuat data...</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.profileName}>{getDisplayName()}</Text>
+                <Text style={styles.profileSubtitle}>{getJabatan()}</Text>
+              </>
+            )}
           </Animated.View>
 
           {/* ===== INFORMASI AKUN ===== */}
@@ -217,7 +290,7 @@ export default function ProfilScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Nama</Text>
-                <Text style={styles.infoValue}>Menunggu data</Text>
+                <Text style={styles.infoValue}>{getDisplayName()}</Text>
               </View>
             </View>
 
@@ -229,7 +302,7 @@ export default function ProfilScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Email</Text>
-                <Text style={styles.infoValue}>Menunggu data</Text>
+                <Text style={styles.infoValue}>{getEmail()}</Text>
               </View>
             </View>
 
@@ -241,7 +314,7 @@ export default function ProfilScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Nomor HP</Text>
-                <Text style={styles.infoValue}>Menunggu data</Text>
+                <Text style={styles.infoValue}>{getNomorHP()}</Text>
               </View>
             </View>
 
@@ -253,7 +326,7 @@ export default function ProfilScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Alamat</Text>
-                <Text style={styles.infoValue}>Menunggu data</Text>
+                <Text style={styles.infoValue}>{getAlamat()}</Text>
               </View>
             </View>
           </Animated.View>
@@ -278,10 +351,14 @@ export default function ProfilScreen() {
               </View>
               <View style={styles.statusContent}>
                 <Text style={styles.statusLabel}>Status Akun</Text>
-                <Text style={styles.statusValue}>Belum terhubung</Text>
+                <Text style={styles.statusValue}>
+                  {user ? "Aktif & Terhubung" : "Belum login"}
+                </Text>
               </View>
               <View style={styles.statusBadge}>
-                <Text style={styles.statusBadgeText}>Menunggu konfigurasi</Text>
+                <Text style={styles.statusBadgeText}>
+                  {user ? "Aktif" : "Offline"}
+                </Text>
               </View>
             </View>
           </Animated.View>
@@ -331,7 +408,7 @@ export default function ProfilScreen() {
             ))}
           </Animated.View>
 
-          {/* ===== TOMBOL KELUAR APLIKASI ===== */}
+          {/* ===== TOMBOL LOGOUT ===== */}
           <Animated.View
             style={[
               styles.logoutWrapper,
@@ -344,18 +421,17 @@ export default function ProfilScreen() {
             <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
               <TouchableOpacity
                 style={styles.logoutButton}
-                onPress={handleKeluarAplikasi}
+                onPress={handleLogout}
                 onPressIn={handlePressIn}
                 onPressOut={handlePressOut}
                 activeOpacity={0.8}
               >
-                <Ionicons name="exit-outline" size={20} color="#FFFFFF" />
-                <Text style={styles.logoutButtonText}>Keluar Aplikasi</Text>
+                <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.logoutButtonText}>Logout</Text>
               </TouchableOpacity>
             </Animated.View>
           </Animated.View>
 
-          {/* Spacer bottom */}
           <View style={{ height: 80 }} />
         </ScrollView>
 
@@ -415,22 +491,10 @@ export default function ProfilScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 20,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
 
   // ===== HEADER =====
   headerContainer: {
@@ -508,11 +572,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -549,10 +609,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  avatarContainer: {
-    position: "relative",
-    marginBottom: 12,
-  },
+  avatarContainer: { position: "relative", marginBottom: 12 },
   avatar: {
     width: 100,
     height: 100,
@@ -562,6 +619,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 3,
     borderColor: "#2D7D46",
+    overflow: "hidden",
   },
   changePhotoButton: {
     flexDirection: "row",
@@ -580,21 +638,9 @@ const styles = StyleSheet.create({
     elevation: 3,
     gap: 4,
   },
-  changePhotoText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-  },
-  profileSubtitle: {
-    fontSize: 13,
-    color: "#888888",
-    marginTop: 4,
-  },
+  changePhotoText: { color: "#FFFFFF", fontSize: 11, fontWeight: "500" },
+  profileName: { fontSize: 20, fontWeight: "bold", color: "#1A1A1A" },
+  profileSubtitle: { fontSize: 13, color: "#888888", marginTop: 4 },
 
   // ===== INFORMASI AKUN =====
   infoCard: {
@@ -614,10 +660,7 @@ const styles = StyleSheet.create({
     color: "#1A1A1A",
     marginBottom: 16,
   },
-  infoItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  infoItem: { flexDirection: "row", alignItems: "center" },
   infoIcon: {
     width: 40,
     height: 40,
@@ -626,24 +669,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: "#888888",
-  },
+  infoContent: { flex: 1 },
+  infoLabel: { fontSize: 12, color: "#888888" },
   infoValue: {
     fontSize: 14,
     fontWeight: "500",
     color: "#1A1A1A",
     marginTop: 1,
   },
-  infoDivider: {
-    height: 1,
-    backgroundColor: "#F0F0F0",
-    marginVertical: 12,
-  },
+  infoDivider: { height: 1, backgroundColor: "#F0F0F0", marginVertical: 12 },
 
   // ===== STATUS AKUN =====
   statusCard: {
@@ -657,10 +691,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  statusRow: { flexDirection: "row", alignItems: "center" },
   statusIconContainer: {
     width: 44,
     height: 44,
@@ -670,32 +701,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  statusContent: {
-    flex: 1,
-  },
-  statusLabel: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#1A1A1A",
-  },
-  statusValue: {
-    fontSize: 12,
-    color: "#888888",
-    marginTop: 1,
-  },
+  statusContent: { flex: 1 },
+  statusLabel: { fontSize: 13, fontWeight: "500", color: "#1A1A1A" },
+  statusValue: { fontSize: 12, color: "#888888", marginTop: 1 },
   statusBadge: {
-    backgroundColor: "#FFF8E1",
+    backgroundColor: "#E8F5EA",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#C9A84C",
+    borderColor: "#2D7D46",
   },
-  statusBadgeText: {
-    fontSize: 10,
-    color: "#C9A84C",
-    fontWeight: "500",
-  },
+  statusBadgeText: { fontSize: 10, color: "#2D7D46", fontWeight: "600" },
 
   // ===== MENU =====
   menuCard: {
@@ -723,13 +740,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
-  menuItemLast: {
-    borderBottomWidth: 0,
-  },
-  menuLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  menuItemLast: { borderBottomWidth: 0 },
+  menuLeft: { flexDirection: "row", alignItems: "center" },
   menuIconContainer: {
     width: 36,
     height: 36,
@@ -738,16 +750,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  menuLabel: {
-    fontSize: 14,
-    color: "#1A1A1A",
-    fontWeight: "500",
-  },
+  menuLabel: { fontSize: 14, color: "#1A1A1A", fontWeight: "500" },
 
-  // ===== KELUAR APLIKASI =====
-  logoutWrapper: {
-    marginTop: 16,
-  },
+  // ===== LOGOUT =====
+  logoutWrapper: { marginTop: 16 },
   logoutButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -762,11 +768,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     gap: 10,
   },
-  logoutButtonText: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
+  logoutButtonText: { fontSize: 15, fontWeight: "bold", color: "#FFFFFF" },
 
   // ===== BOTTOM NAV =====
   bottomNav: {
@@ -806,16 +808,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2D7D46",
     borderRadius: 2,
   },
-  navLabel: {
-    fontSize: 10,
-    marginTop: 2,
-    fontWeight: "500",
-  },
-  navLabelActive: {
-    color: "#2D7D46",
-    fontWeight: "600",
-  },
-  navLabelInactive: {
-    color: "#999",
-  },
+  navLabel: { fontSize: 10, marginTop: 2, fontWeight: "500" },
+  navLabelActive: { color: "#2D7D46", fontWeight: "600" },
+  navLabelInactive: { color: "#999" },
 });

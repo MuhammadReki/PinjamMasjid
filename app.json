@@ -9,10 +9,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Aplikasi memerlukan akses lokasi untuk mendeteksi lokasi acara otomatis."
+      }
     },
     "android": {
-      "package": "com.muhammadreki.PinjamMasjid"
+      "package": "com.muhammadreki.PinjamMasjid",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "web": {
       "output": "static",
@@ -32,7 +36,13 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Aplikasi memerlukan akses lokasi untuk mendeteksi lokasi acara otomatis."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

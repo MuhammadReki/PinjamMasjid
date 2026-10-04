@@ -1,5 +1,6 @@
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Location from "expo-location";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
@@ -19,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { saveEvent } from "../utils/storage";
 
 export default function BuatAcaraScreen() {
   const insets = useSafeAreaInsets();
@@ -31,6 +33,7 @@ export default function BuatAcaraScreen() {
   const [jam, setJam] = useState("");
   const [deskripsi, setDeskripsi] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingLokasi, setIsLoadingLokasi] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -102,6 +105,54 @@ export default function BuatAcaraScreen() {
     }
   }, [showSuccess]);
 
+  // ===== FUNGSI DAPETIN LOKASI OTOMATIS =====
+  const getLocation = async () => {
+    setIsLoadingLokasi(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Izin Diperlukan",
+          "Izin lokasi diperlukan untuk mendeteksi lokasi Anda otomatis",
+        );
+        setIsLoadingLokasi(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const { latitude, longitude } = location.coords;
+      console.log("Koordinat:", latitude, longitude);
+
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            "User-Agent": "PinjamMasjid-App",
+          },
+        },
+      );
+
+      const data = await response.json();
+      console.log("Alamat:", data.display_name);
+
+      if (data.display_name) {
+        setLokasi(data.display_name);
+        Alert.alert("Berhasil! 📍", `Lokasi terdeteksi:\n${data.display_name}`);
+      } else {
+        setLokasi(`${latitude}, ${longitude}`);
+        Alert.alert("Info", "Lokasi terdeteksi pake koordinat");
+      }
+    } catch (error: any) {
+      console.error("Error getting location:", error);
+      Alert.alert("Gagal", "Tidak dapat mendeteksi lokasi. Coba lagi.");
+    } finally {
+      setIsLoadingLokasi(false);
+    }
+  };
+
   // ===== FUNGSI DATE PICKER =====
   const showDatePickerModal = (mode: "start" | "end") => {
     setPickerMode(mode);
@@ -114,7 +165,6 @@ export default function BuatAcaraScreen() {
       const formatted = formatDate(selectedDate);
       if (pickerMode === "start") {
         setTanggalMulai(formatted);
-        // Validasi tanggal selesai
         if (tanggalSelesai) {
           const endDate = new Date(tanggalSelesai);
           if (selectedDate > endDate) {
@@ -126,7 +176,6 @@ export default function BuatAcaraScreen() {
           }
         }
       } else {
-        // Validasi tanggal selesai tidak boleh sebelum tanggal mulai
         if (tanggalMulai) {
           const startDate = new Date(tanggalMulai);
           if (selectedDate < startDate) {
@@ -142,8 +191,9 @@ export default function BuatAcaraScreen() {
     }
   };
 
-  // ===== FUNGSI LAIN =====
-  const handleBuatAcara = () => {
+  // ===== FUNGSI BUAT ACARA (SUPABASE) =====
+  const handleBuatAcara = async () => {
+    // Validasi
     if (!namaAcara.trim()) {
       Alert.alert("Validasi", "Nama acara wajib diisi!");
       return;
@@ -166,10 +216,27 @@ export default function BuatAcaraScreen() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      // 🔥 SIMPAN KE SUPABASE
+      const result = await saveEvent({
+        nama: namaAcara,
+        lokasi: lokasi,
+        tanggal_mulai: tanggalMulai,
+        tanggal_selesai: tanggalSelesai,
+        jam: jam,
+        deskripsi: deskripsi || "-",
+      });
+
+      console.log("Acara berhasil disimpan:", result);
+
       setIsLoading(false);
       setShowSuccess(true);
-    }, 1500);
+    } catch (error: any) {
+      console.error("Error buat acara:", error);
+      setIsLoading(false);
+      Alert.alert("Gagal", error.message || "Terjadi kesalahan. Coba lagi.");
+    }
   };
 
   const handlePressIn = () => {
@@ -322,12 +389,25 @@ export default function BuatAcaraScreen() {
               </View>
               <TouchableOpacity
                 style={styles.locationButton}
+                onPress={getLocation}
+                disabled={isLoadingLokasi}
                 activeOpacity={0.7}
               >
-                <Ionicons name="locate" size={14} color="#2D7D46" />
-                <Text style={styles.locationButtonText}>
-                  Gunakan Lokasi Saya
-                </Text>
+                {isLoadingLokasi ? (
+                  <>
+                    <ActivityIndicator size="small" color="#2D7D46" />
+                    <Text style={styles.locationButtonText}>
+                      Mendeteksi lokasi...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="locate" size={14} color="#2D7D46" />
+                    <Text style={styles.locationButtonText}>
+                      Gunakan Lokasi Saya
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
 
@@ -517,22 +597,10 @@ export default function BuatAcaraScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
 
   // ===== HEADER =====
   headerContainer: {
@@ -610,16 +678,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
-  headerTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
+  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -634,9 +694,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 16,
   },
-  headerPlaceholder: {
-    width: 40,
-  },
+  headerPlaceholder: { width: 40 },
 
   // ===== STEP PROGRESS =====
   stepContainer: {
@@ -666,34 +724,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#E8E8E8",
   },
-  stepDotActive: {
-    backgroundColor: "#2D7D46",
-    borderColor: "#2D7D46",
-  },
+  stepDotActive: { backgroundColor: "#2D7D46", borderColor: "#2D7D46" },
   stepLine: {
     width: 35,
     height: 2,
     backgroundColor: "#E8E8E8",
     marginHorizontal: 4,
   },
-  stepLineActive: {
-    backgroundColor: "#2D7D46",
-  },
+  stepLineActive: { backgroundColor: "#2D7D46" },
   stepLabels: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 4,
     marginBottom: 2,
   },
-  stepLabel: {
-    fontSize: 9,
-    color: "#B0B0B0",
-    fontWeight: "500",
-  },
-  stepLabelActive: {
-    color: "#2D7D46",
-    fontWeight: "600",
-  },
+  stepLabel: { fontSize: 9, color: "#B0B0B0", fontWeight: "500" },
+  stepLabelActive: { color: "#2D7D46", fontWeight: "600" },
   stepInfo: {
     fontSize: 10,
     color: "#8A8A8A",
@@ -713,17 +759,8 @@ const styles = StyleSheet.create({
     elevation: 6,
     marginTop: 14,
   },
-  inputWrapper: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 5,
-  },
-
-  // ===== INPUT =====
+  inputWrapper: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: "600", color: "#333", marginBottom: 5 },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -734,24 +771,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
     height: 50,
   },
-  input: {
-    flex: 1,
-    fontSize: 12,
-    color: "#1A1A1A",
-    paddingLeft: 10,
-  },
-
-  // ===== ROW =====
+  input: { flex: 1, fontSize: 12, color: "#1A1A1A", paddingLeft: 10 },
   rowContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 10,
   },
-  halfWidth: {
-    flex: 1,
-  },
-
-  // ===== DATE BUTTON =====
+  halfWidth: { flex: 1 },
   dateButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -763,29 +789,15 @@ const styles = StyleSheet.create({
     height: 50,
     gap: 8,
   },
-  dateButtonText: {
-    flex: 1,
-    fontSize: 12,
-    color: "#1A1A1A",
-  },
-  datePlaceholder: {
-    color: "#B0B0B0",
-  },
-
-  // ===== LOCATION =====
+  dateButtonText: { flex: 1, fontSize: 12, color: "#1A1A1A" },
+  datePlaceholder: { color: "#B0B0B0" },
   locationButton: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 6,
     gap: 4,
   },
-  locationButtonText: {
-    fontSize: 12,
-    color: "#2D7D46",
-    fontWeight: "500",
-  },
-
-  // ===== DESKRIPSI =====
+  locationButtonText: { fontSize: 12, color: "#2D7D46", fontWeight: "500" },
   deskripsiToolbar: {
     flexDirection: "row",
     gap: 8,
@@ -798,14 +810,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#F5F0E8",
   },
-  toolbarText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  toolbarItalic: {
-    fontStyle: "italic",
-  },
+  toolbarText: { fontSize: 12, fontWeight: "bold", color: "#333" },
+  toolbarItalic: { fontStyle: "italic" },
   deskripsiInput: {
     borderWidth: 1.5,
     borderColor: "#E8E8E8",
@@ -818,8 +824,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlignVertical: "top",
   },
-
-  // ===== TOMBOL =====
   buttonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -840,11 +844,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  cancelButtonText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#C9A84C",
-  },
+  cancelButtonText: { fontSize: 11, fontWeight: "600", color: "#C9A84C" },
   submitButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -861,11 +861,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  submitButtonText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
+  submitButtonText: { fontSize: 14, fontWeight: "bold", color: "#FFFFFF" },
 
   // ===== MODAL SUKSES =====
   modalOverlay: {
@@ -882,10 +878,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     maxWidth: 340,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
     elevation: 12,
   },
   successIconContainer: {
@@ -919,9 +911,5 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
   },
-  successButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "600",
-  },
+  successButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
 });

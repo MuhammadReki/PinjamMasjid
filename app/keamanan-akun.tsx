@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { supabase } from "../utils/supabase";
 
 export default function KeamananAkunScreen() {
   const insets = useSafeAreaInsets();
@@ -36,7 +37,7 @@ export default function KeamananAkunScreen() {
   const [isLoginNotificationEnabled, setIsLoginNotificationEnabled] =
     useState(true);
 
-  // ===== REF INPUT (BIAR GA LONCAT) =====
+  // ===== REF INPUT =====
   const inputLamaRef = useRef<TextInput>(null);
   const inputBaruRef = useRef<TextInput>(null);
   const inputKonfirmasiRef = useRef<TextInput>(null);
@@ -44,9 +45,7 @@ export default function KeamananAkunScreen() {
   // ===== ANIMASI =====
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // ===== ANIMASI CUMA SEKALI =====
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -63,8 +62,9 @@ export default function KeamananAkunScreen() {
     ]).start();
   }, []);
 
-  // ===== FUNGSI =====
-  const handleSimpan = () => {
+  // ===== FUNGSI UPDATE PASSWORD =====
+  const handleSimpan = async () => {
+    // Validasi
     if (
       !passwordLama.trim() ||
       !passwordBaru.trim() ||
@@ -93,20 +93,63 @@ export default function KeamananAkunScreen() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      // 1. Ambil user yang login
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || !user.email) {
+        Alert.alert("Error", "Anda harus login terlebih dahulu");
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Verifikasi password lama dulu
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: passwordLama,
+      });
+
+      if (verifyError) {
+        Alert.alert("Gagal", "Password lama salah! Silakan coba lagi.");
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Update password baru
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: passwordBaru,
+      });
+
+      if (updateError) {
+        Alert.alert("Gagal", updateError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("Password berhasil diperbarui");
+
+      // 4. Reset form
+      setPasswordLama("");
+      setPasswordBaru("");
+      setKonfirmasiPassword("");
+
       setIsLoading(false);
-      Alert.alert("Berhasil! ✅", "Keamanan akun berhasil diperbarui", [
+      Alert.alert("Berhasil! ✅", "Password berhasil diperbarui", [
         { text: "OK", onPress: () => router.back() },
       ]);
-    }, 1500);
+    } catch (error: any) {
+      console.error("Error update password:", error);
+      setIsLoading(false);
+      Alert.alert(
+        "Gagal",
+        error.message || "Terjadi kesalahan. Silakan coba lagi.",
+      );
+    }
   };
 
-  // ===== HANDLE FOKUS (GA PAKE STATE =====
-  const handleFocusLama = () => {
-    // Ga pake state biar ga re-render
-  };
-
-  // ===== RENDER =====
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
@@ -158,10 +201,10 @@ export default function KeamananAkunScreen() {
               </View>
               <View style={styles.statusContent}>
                 <Text style={styles.statusLabel}>Status Keamanan</Text>
-                <Text style={styles.statusValue}>Tingkat keamanan akun</Text>
+                <Text style={styles.statusValue}>Akun Anda terlindungi</Text>
               </View>
               <View style={styles.statusBadge}>
-                <Text style={styles.statusBadgeText}>Menunggu konfigurasi</Text>
+                <Text style={styles.statusBadgeText}>Aman</Text>
               </View>
             </View>
           </View>
@@ -182,7 +225,7 @@ export default function KeamananAkunScreen() {
                 <TextInput
                   ref={inputLamaRef}
                   style={styles.input}
-                  placeholder=""
+                  placeholder="Masukkan password lama"
                   placeholderTextColor="#B0B0B0"
                   value={passwordLama}
                   onChangeText={setPasswordLama}
@@ -212,7 +255,7 @@ export default function KeamananAkunScreen() {
                 <TextInput
                   ref={inputBaruRef}
                   style={styles.input}
-                  placeholder=""
+                  placeholder="Minimal 8 karakter"
                   placeholderTextColor="#B0B0B0"
                   value={passwordBaru}
                   onChangeText={setPasswordBaru}
@@ -246,7 +289,7 @@ export default function KeamananAkunScreen() {
                 <TextInput
                   ref={inputKonfirmasiRef}
                   style={styles.input}
-                  placeholder=""
+                  placeholder="Ketik ulang password baru"
                   placeholderTextColor="#B0B0B0"
                   value={konfirmasiPassword}
                   onChangeText={setKonfirmasiPassword}
@@ -287,7 +330,7 @@ export default function KeamananAkunScreen() {
                 value={isTwoFactorEnabled}
                 onValueChange={setIsTwoFactorEnabled}
                 trackColor={{ false: "#D1D1D1", true: "#2D7D46" }}
-                thumbColor={isTwoFactorEnabled ? "#FFFFFF" : "#FFFFFF"}
+                thumbColor="#FFFFFF"
                 ios_backgroundColor="#D1D1D1"
               />
             </View>
@@ -315,7 +358,7 @@ export default function KeamananAkunScreen() {
                 value={isLoginNotificationEnabled}
                 onValueChange={setIsLoginNotificationEnabled}
                 trackColor={{ false: "#D1D1D1", true: "#2D7D46" }}
-                thumbColor={isLoginNotificationEnabled ? "#FFFFFF" : "#FFFFFF"}
+                thumbColor="#FFFFFF"
                 ios_backgroundColor="#D1D1D1"
               />
             </View>
@@ -362,22 +405,10 @@ export default function KeamananAkunScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
 
   // ===== HEADER =====
   headerContainer: {
@@ -455,11 +486,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -495,10 +522,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  statusRow: { flexDirection: "row", alignItems: "center" },
   statusIconContainer: {
     width: 48,
     height: 48,
@@ -508,32 +532,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  statusContent: {
-    flex: 1,
-  },
-  statusLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1A1A1A",
-  },
-  statusValue: {
-    fontSize: 12,
-    color: "#888888",
-    marginTop: 1,
-  },
+  statusContent: { flex: 1 },
+  statusLabel: { fontSize: 14, fontWeight: "600", color: "#1A1A1A" },
+  statusValue: { fontSize: 12, color: "#888888", marginTop: 1 },
   statusBadge: {
-    backgroundColor: "#FFF8E1",
+    backgroundColor: "#E8F5EA",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#C9A84C",
+    borderColor: "#2D7D46",
   },
-  statusBadgeText: {
-    fontSize: 10,
-    color: "#C9A84C",
-    fontWeight: "500",
-  },
+  statusBadgeText: { fontSize: 10, color: "#2D7D46", fontWeight: "600" },
 
   // ===== PASSWORD CARD =====
   passwordCard: {
@@ -555,15 +565,8 @@ const styles = StyleSheet.create({
   },
 
   // ===== INPUT =====
-  inputWrapper: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 5,
-  },
+  inputWrapper: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: "600", color: "#333", marginBottom: 5 },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -599,11 +602,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  switchLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
+  switchLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
   switchIconContainer: {
     width: 40,
     height: 40,
@@ -613,24 +612,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  switchContent: {
-    flex: 1,
-  },
-  switchLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#1A1A1A",
-  },
-  switchSubtext: {
-    fontSize: 12,
-    color: "#888888",
-    marginTop: 1,
-  },
-  switchDivider: {
-    height: 1,
-    backgroundColor: "#F0F0F0",
-    marginVertical: 14,
-  },
+  switchContent: { flex: 1 },
+  switchLabel: { fontSize: 14, fontWeight: "500", color: "#1A1A1A" },
+  switchSubtext: { fontSize: 12, color: "#888888", marginTop: 1 },
+  switchDivider: { height: 1, backgroundColor: "#F0F0F0", marginVertical: 14 },
 
   // ===== HISTORY CARD =====
   historyCard: {
@@ -644,10 +629,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  emptyStateContainer: {
-    alignItems: "center",
-    paddingVertical: 20,
-  },
+  emptyStateContainer: { alignItems: "center", paddingVertical: 20 },
   emptyStateIconContainer: {
     width: 80,
     height: 80,
@@ -657,11 +639,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  emptyStateTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1A1A1A",
-  },
+  emptyStateTitle: { fontSize: 16, fontWeight: "600", color: "#1A1A1A" },
   emptyStateSubtitle: {
     fontSize: 13,
     color: "#888888",
@@ -671,9 +649,7 @@ const styles = StyleSheet.create({
   },
 
   // ===== SAVE BUTTON =====
-  saveWrapper: {
-    marginTop: 20,
-  },
+  saveWrapper: { marginTop: 20 },
   saveButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -688,9 +664,5 @@ const styles = StyleSheet.create({
     elevation: 5,
     gap: 10,
   },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
+  saveButtonText: { fontSize: 16, fontWeight: "bold", color: "#FFFFFF" },
 });

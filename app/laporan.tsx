@@ -1,10 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
 import * as Print from "expo-print";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -33,6 +33,7 @@ export default function LaporanScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState("Bulanan");
   const [showExportModal, setShowExportModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
 
@@ -43,21 +44,29 @@ export default function LaporanScreen() {
   const modalSlideAnim = useRef(new Animated.Value(height)).current;
 
   // ===== LOAD DATA =====
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [barangData, acaraData] = await Promise.all([
-          getItems(),
-          getEvents(),
-        ]);
-        setItems(barangData || []);
-        setEvents(acaraData || []);
-      } catch (error) {
-        console.error("Error loading data:", error);
-      }
-    };
-    loadData();
+  const loadData = useCallback(async () => {
+    setIsDataLoading(true);
+    try {
+      const [barangData, acaraData] = await Promise.all([
+        getItems(),
+        getEvents(),
+      ]);
+      console.log("Laporan - Barang:", barangData?.length);
+      console.log("Laporan - Acara:", acaraData?.length);
+      setItems(barangData || []);
+      setEvents(acaraData || []);
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setIsDataLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
 
   useEffect(() => {
     Animated.parallel([
@@ -117,6 +126,20 @@ export default function LaporanScreen() {
     });
   };
 
+  // ===== HELPER: FORMAT TANGGAL =====
+  const formatTanggal = (dateStr: any) => {
+    if (!dateStr) return "-";
+    try {
+      return new Date(dateStr).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return "-";
+    }
+  };
+
   // ===== EXPORT PDF =====
   const exportPDF = async () => {
     closeExportModal();
@@ -137,7 +160,7 @@ export default function LaporanScreen() {
               <td style="padding: 8px; border: 1px solid #ddd;">${item.nama || "-"}</td>
               <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.jumlah || 0}</td>
               <td style="padding: 8px; border: 1px solid #ddd;">${item.kondisi || "-"}</td>
-              <td style="padding: 8px; border: 1px solid #ddd;">${item.createdAt ? new Date(item.createdAt).toLocaleDateString("id-ID") : "-"}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${formatTanggal(item.created_at || item.createdAt)}</td>
               <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
                 <span style="color: #2D7D46; font-weight: bold;">Tersedia</span>
               </td>
@@ -249,7 +272,6 @@ export default function LaporanScreen() {
         year: "numeric",
       });
 
-      // Data untuk Excel
       const excelData =
         items.length > 0
           ? items.map((item, index) => ({
@@ -257,9 +279,7 @@ export default function LaporanScreen() {
               "Nama Barang": item.nama || "-",
               Jumlah: item.jumlah || 0,
               Kondisi: item.kondisi || "-",
-              Tanggal: item.createdAt
-                ? new Date(item.createdAt).toLocaleDateString("id-ID")
-                : "-",
+              Tanggal: formatTanggal(item.created_at || item.createdAt),
               Status: "Tersedia",
             }))
           : [
@@ -273,7 +293,6 @@ export default function LaporanScreen() {
               },
             ];
 
-      // Summary data
       const summaryData = [
         { Keterangan: "Total Barang", Nilai: items.length },
         { Keterangan: "Total Acara", Nilai: events.length },
@@ -284,11 +303,9 @@ export default function LaporanScreen() {
 
       const wb = XLSX.utils.book_new();
 
-      // Sheet Laporan
       const ws = XLSX.utils.json_to_sheet(excelData);
       XLSX.utils.book_append_sheet(wb, ws, "Laporan Inventaris");
 
-      // Sheet Summary
       const wsSummary = XLSX.utils.json_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan");
 
@@ -425,7 +442,7 @@ export default function LaporanScreen() {
                     ? items.length
                     : card.id === 2
                       ? events.length
-                      : "Menunggu data"}
+                      : "0"}
                 </Text>
               </View>
             ))}
@@ -447,36 +464,12 @@ export default function LaporanScreen() {
                 <Ionicons name="analytics-outline" size={48} color="#C9A84C" />
               </View>
               <Text style={styles.chartEmptyTitle}>
-                Belum ada data aktivitas
+                {isDataLoading
+                  ? "Memuat data..."
+                  : `${items.length} barang, ${events.length} acara`}
               </Text>
               <Text style={styles.chartEmptySubtitle}>
-                Grafik akan muncul setelah ada aktivitas inventaris
-              </Text>
-            </View>
-          </Animated.View>
-
-          {/* ===== LAPORAN TERBARU ===== */}
-          <Animated.View
-            style={[
-              styles.reportCard,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
-            ]}
-          >
-            <Text style={styles.reportTitle}>Laporan Terbaru</Text>
-            <View style={styles.reportEmpty}>
-              <View style={styles.reportIconContainer}>
-                <Ionicons
-                  name="document-text-outline"
-                  size={48}
-                  color="#C9A84C"
-                />
-              </View>
-              <Text style={styles.reportEmptyTitle}>Belum ada laporan</Text>
-              <Text style={styles.reportEmptySubtitle}>
-                Data laporan akan muncul setelah aktivitas dimulai
+                Ringkasan aktivitas inventaris dan acara masjid
               </Text>
             </View>
           </Animated.View>
@@ -505,7 +498,6 @@ export default function LaporanScreen() {
             </Animated.View>
           </Animated.View>
 
-          {/* Spacer bottom */}
           <View style={{ height: 20 }} />
         </ScrollView>
 
@@ -608,21 +600,10 @@ export default function LaporanScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 20 },
 
   // ===== HEADER =====
   headerContainer: {
@@ -700,11 +681,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -744,18 +721,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#E8E8E8",
   },
-  periodPillActive: {
-    backgroundColor: "#2D7D46",
-    borderColor: "#2D7D46",
-  },
-  periodText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#888888",
-  },
-  periodTextActive: {
-    color: "#FFFFFF",
-  },
+  periodPillActive: { backgroundColor: "#2D7D46", borderColor: "#2D7D46" },
+  periodText: { fontSize: 13, fontWeight: "500", color: "#888888" },
+  periodTextActive: { color: "#FFFFFF" },
 
   // ===== CARD RINGKASAN =====
   summaryGrid: {
@@ -785,14 +753,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-  summaryLabel: {
-    fontSize: 12,
-    color: "#888888",
-    fontWeight: "500",
-  },
+  summaryLabel: { fontSize: 12, color: "#888888", fontWeight: "500" },
   summaryValue: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "700",
     color: "#1A1A1A",
     marginTop: 2,
   },
@@ -815,10 +779,7 @@ const styles = StyleSheet.create({
     color: "#1A1A1A",
     marginBottom: 16,
   },
-  chartPlaceholder: {
-    alignItems: "center",
-    paddingVertical: 30,
-  },
+  chartPlaceholder: { alignItems: "center", paddingVertical: 30 },
   chartIconContainer: {
     width: 80,
     height: 80,
@@ -828,11 +789,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  chartEmptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1A1A1A",
-  },
+  chartEmptyTitle: { fontSize: 16, fontWeight: "600", color: "#1A1A1A" },
   chartEmptySubtitle: {
     fontSize: 13,
     color: "#888888",
@@ -840,53 +797,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // ===== LAPORAN TERBARU =====
-  reportCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  reportTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-    marginBottom: 16,
-  },
-  reportEmpty: {
-    alignItems: "center",
-    paddingVertical: 30,
-  },
-  reportIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#F5F0E8",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  reportEmptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1A1A1A",
-  },
-  reportEmptySubtitle: {
-    fontSize: 13,
-    color: "#888888",
-    textAlign: "center",
-    marginTop: 4,
-  },
-
   // ===== TOMBOL EXPORT =====
-  exportWrapper: {
-    marginTop: 4,
-  },
+  exportWrapper: { marginTop: 4 },
   exportButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -901,11 +813,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     gap: 10,
   },
-  exportButtonText: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
+  exportButtonText: { fontSize: 15, fontWeight: "bold", color: "#FFFFFF" },
 
   // ===== LOADING =====
   loadingOverlay: {
@@ -938,10 +846,7 @@ const styles = StyleSheet.create({
   },
 
   // ===== MODAL EXPORT =====
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
+  modalOverlay: { flex: 1, justifyContent: "flex-end" },
   modalBackdrop: {
     position: "absolute",
     top: 0,
@@ -982,10 +887,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
-  modalOptionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  modalOptionLeft: { flexDirection: "row", alignItems: "center" },
   modalIconBox: {
     width: 48,
     height: 48,
@@ -994,16 +896,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 14,
   },
-  modalOptionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#1A1A1A",
-  },
-  modalOptionDesc: {
-    fontSize: 12,
-    color: "#888888",
-    marginTop: 2,
-  },
+  modalOptionTitle: { fontSize: 15, fontWeight: "600", color: "#1A1A1A" },
+  modalOptionDesc: { fontSize: 12, color: "#888888", marginTop: 2 },
   modalCancel: {
     marginTop: 16,
     paddingVertical: 14,
@@ -1011,9 +905,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#F5F0E8",
     alignItems: "center",
   },
-  modalCancelText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#888888",
-  },
+  modalCancelText: { fontSize: 15, fontWeight: "600", color: "#888888" },
 });

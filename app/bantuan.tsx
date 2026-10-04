@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -24,7 +26,6 @@ export default function BantuanScreen() {
   // ===== ANIMASI =====
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -43,22 +44,6 @@ export default function BantuanScreen() {
   }, []);
 
   // ===== FUNGSI =====
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.95,
-      useNativeDriver: true,
-      speed: 50,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 50,
-    }).start();
-  };
-
   const toggleFAQ = (id: string) => {
     if (expandedFAQ === id) {
       setExpandedFAQ(null);
@@ -67,24 +52,110 @@ export default function BantuanScreen() {
     }
   };
 
+  // ===== HUBUNGI ADMIN VIA WHATSAPP =====
+  const handleHubungiAdmin = () => {
+    const phoneNumber = "6281234567890"; // Ganti nomor admin
+    const message =
+      "Assalamualaikum, saya butuh bantuan dengan aplikasi PinjamMasjid";
+
+    const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+
+    Linking.canOpenURL(url)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          Alert.alert("Error", "WhatsApp tidak terinstall di HP Anda");
+        }
+      })
+      .catch((err) => console.error("Error opening WhatsApp:", err));
+  };
+
   // ===== DATA KATEGORI =====
   const categories = [
     { id: "inventaris", icon: "cube-outline", label: "Inventaris" },
     { id: "acara", icon: "calendar-outline", label: "Acara" },
-    { id: "riwayat", icon: "document-text-outline", label: "Riwayat" },
     { id: "akun", icon: "person-outline", label: "Akun" },
     { id: "notifikasi", icon: "notifications-outline", label: "Notifikasi" },
+    { id: "laporan", icon: "document-text-outline", label: "Laporan" },
     { id: "pengaturan", icon: "settings-outline", label: "Pengaturan" },
   ];
 
-  // ===== DATA FAQ =====
+  // ===== DATA FAQ LENGKAP =====
   const faqs = [
-    { id: "1", question: "Bagaimana cara mendaftarkan barang?" },
-    { id: "2", question: "Bagaimana membuat acara?" },
-    { id: "3", question: "Bagaimana meminjam barang?" },
-    { id: "4", question: "Bagaimana mengubah profil?" },
-    { id: "5", question: "Bagaimana mengaktifkan notifikasi?" },
+    {
+      id: "1",
+      question: "Bagaimana cara mendaftarkan barang?",
+      answer:
+        "1. Buka menu 'Daftarkan Barang' dari Dashboard atau Inventaris\n2. Ambil foto barang menggunakan kamera\n3. Isi nama barang, jumlah, deskripsi, harga, dan kondisi\n4. Pilih kondisi: Baik, Ada Retak, atau Perlu Perbaikan\n5. Tap 'Daftarkan Barang' — data akan tersimpan otomatis",
+    },
+    {
+      id: "2",
+      question: "Bagaimana membuat acara?",
+      answer:
+        "1. Buka menu 'Buat Acara'\n2. Isi nama acara dan lokasi (bisa pakai GPS otomatis)\n3. Pilih tanggal mulai dan selesai\n4. Isi jam dan deskripsi acara\n5. Tap 'Buat Acara' — acara akan muncul di Dashboard",
+    },
+    {
+      id: "3",
+      question: "Bagaimana meminjam barang?",
+      answer:
+        "Fitur peminjaman akan segera hadir. Untuk sementara, silakan hubungi admin DKM untuk peminjaman manual.",
+    },
+    {
+      id: "4",
+      question: "Bagaimana mengubah profil?",
+      answer:
+        "1. Buka halaman 'Profil' dari bottom navigation\n2. Tap 'Edit Profil'\n3. Ubah nama, nomor HP, alamat, atau foto\n4. Tap 'Simpan Perubahan'",
+    },
+    {
+      id: "5",
+      question: "Bagaimana mengaktifkan notifikasi?",
+      answer:
+        "Notifikasi otomatis aktif saat ada aktivitas baru. Untuk pengaturan lanjutan:\n1. Buka 'Profil' → 'Notifikasi'\n2. Atur jenis notifikasi yang diinginkan",
+    },
+    {
+      id: "6",
+      question: "Bagaimana cara export laporan?",
+      answer:
+        "1. Buka menu 'Laporan' dari Dashboard\n2. Pilih periode (Mingguan/Bulanan/Tahunan)\n3. Tap 'Export Laporan'\n4. Pilih format PDF atau Excel\n5. File akan otomatis terbuka untuk di-share",
+    },
+    {
+      id: "7",
+      question: "Apa itu Status Kondisi Barang?",
+      answer:
+        "Kondisi barang dibagi 3:\n• Baik — Kondisi bagus, siap pakai\n• Ada Retak — Ada kerusakan ringan\n• Perlu Perbaikan — Perlu diperbaiki sebelum dipakai",
+    },
+    {
+      id: "8",
+      question: "Bagaimana cara mengubah password?",
+      answer:
+        "1. Buka 'Profil' → 'Keamanan Akun'\n2. Isi password lama dan password baru (min 8 karakter)\n3. Konfirmasi password baru\n4. Tap 'Simpan Perubahan'",
+    },
+    {
+      id: "9",
+      question: "Data saya tersimpan di mana?",
+      answer:
+        "Semua data tersimpan aman di cloud (Supabase). Data akan sync otomatis di semua perangkat yang login dengan akun yang sama.",
+    },
+    {
+      id: "10",
+      question: "Bagaimana cara logout?",
+      answer:
+        "1. Buka 'Profil'\n2. Scroll ke bawah\n3. Tap tombol 'Logout' merah\n4. Konfirmasi logout",
+    },
   ];
+
+  // ===== FILTER FAQ BERDASARKAN SEARCH =====
+  const filteredFaqs = useMemo(() => {
+    if (!searchQuery.trim()) return faqs;
+
+    const query = searchQuery.toLowerCase();
+    return faqs.filter(
+      (faq) =>
+        faq.question.toLowerCase().includes(query) ||
+        faq.answer.toLowerCase().includes(query),
+    );
+  }, [searchQuery, faqs]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -138,11 +209,16 @@ export default function BantuanScreen() {
               <Ionicons name="search-outline" size={20} color="#888888" />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Apa yang ingin Anda tanyakan?"
+                placeholder="Cari pertanyaan..."
                 placeholderTextColor="#B0B0B0"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                  <Ionicons name="close-circle" size={20} color="#B0B0B0" />
+                </TouchableOpacity>
+              )}
             </View>
           </Animated.View>
 
@@ -165,7 +241,9 @@ export default function BantuanScreen() {
                 key={category.id}
                 style={styles.categoryCard}
                 activeOpacity={0.8}
-                onPress={() => {}}
+                onPress={() => {
+                  setSearchQuery(category.label);
+                }}
               >
                 <View style={styles.categoryIconContainer}>
                   <Ionicons
@@ -189,44 +267,50 @@ export default function BantuanScreen() {
               },
             ]}
           >
-            <Text style={styles.sectionTitle}>Pertanyaan Umum</Text>
+            <Text style={styles.sectionTitle}>
+              Pertanyaan Umum ({filteredFaqs.length})
+            </Text>
           </Animated.View>
 
           <View style={styles.faqContainer}>
-            {faqs.map((faq) => {
-              const isExpanded = expandedFAQ === faq.id;
-              return (
-                <TouchableOpacity
-                  key={faq.id}
-                  style={[styles.faqCard, isExpanded && styles.faqCardExpanded]}
-                  onPress={() => toggleFAQ(faq.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.faqHeader}>
-                    <Text style={styles.faqQuestion}>{faq.question}</Text>
-                    <Ionicons
-                      name={isExpanded ? "chevron-up" : "chevron-down"}
-                      size={20}
-                      color="#2D7D46"
-                    />
-                  </View>
-                  {isExpanded && (
-                    <Animated.View
-                      style={[
-                        styles.faqAnswerContainer,
-                        {
-                          opacity: fadeAnim,
-                        },
-                      ]}
-                    >
-                      <Text style={styles.faqAnswer}>
-                        Informasi akan ditampilkan setelah sistem dikonfigurasi
-                      </Text>
-                    </Animated.View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+            {filteredFaqs.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="search-outline" size={48} color="#C9A84C" />
+                <Text style={styles.emptyTitle}>Tidak ditemukan</Text>
+                <Text style={styles.emptySubtitle}>
+                  Coba kata kunci lain atau hubungi admin
+                </Text>
+              </View>
+            ) : (
+              filteredFaqs.map((faq) => {
+                const isExpanded = expandedFAQ === faq.id;
+                return (
+                  <TouchableOpacity
+                    key={faq.id}
+                    style={[
+                      styles.faqCard,
+                      isExpanded && styles.faqCardExpanded,
+                    ]}
+                    onPress={() => toggleFAQ(faq.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.faqHeader}>
+                      <Text style={styles.faqQuestion}>{faq.question}</Text>
+                      <Ionicons
+                        name={isExpanded ? "chevron-up" : "chevron-down"}
+                        size={20}
+                        color="#2D7D46"
+                      />
+                    </View>
+                    {isExpanded && (
+                      <View style={styles.faqAnswerContainer}>
+                        <Text style={styles.faqAnswer}>{faq.answer}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
 
           {/* ===== HUBUNGI KAMI ===== */}
@@ -241,7 +325,7 @@ export default function BantuanScreen() {
           >
             <View style={styles.contactLeft}>
               <View style={styles.contactIconContainer}>
-                <Ionicons name="mail-outline" size={24} color="#2D7D46" />
+                <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
               </View>
               <View style={styles.contactContent}>
                 <Text style={styles.contactTitle}>Hubungi Admin</Text>
@@ -250,9 +334,13 @@ export default function BantuanScreen() {
                 </Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.contactButton} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.contactButton}
+              activeOpacity={0.7}
+              onPress={handleHubungiAdmin}
+            >
               <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.contactButtonText}>Hubungi</Text>
+              <Text style={styles.contactButtonText}>Chat WA</Text>
             </TouchableOpacity>
           </Animated.View>
 
@@ -267,22 +355,10 @@ export default function BantuanScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
 
   // ===== HEADER =====
   headerContainer: {
@@ -360,11 +436,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -389,9 +461,7 @@ const styles = StyleSheet.create({
   },
 
   // ===== SEARCH =====
-  searchWrapper: {
-    marginTop: 16,
-  },
+  searchWrapper: { marginTop: 16 },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -416,15 +486,8 @@ const styles = StyleSheet.create({
   },
 
   // ===== SECTION =====
-  sectionHeader: {
-    marginTop: 20,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-  },
+  sectionHeader: { marginTop: 20, marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: "bold", color: "#1A1A1A" },
 
   // ===== KATEGORI =====
   categoryGrid: {
@@ -454,16 +517,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-  categoryLabel: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#333",
-  },
+  categoryLabel: { fontSize: 12, fontWeight: "500", color: "#333" },
 
   // ===== FAQ =====
-  faqContainer: {
-    gap: 10,
-  },
+  faqContainer: { gap: 10 },
   faqCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
@@ -476,10 +533,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E8E8E8",
   },
-  faqCardExpanded: {
-    borderColor: "#2D7D46",
-    borderWidth: 1.5,
-  },
+  faqCardExpanded: { borderColor: "#2D7D46", borderWidth: 1.5 },
   faqHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -488,7 +542,7 @@ const styles = StyleSheet.create({
   faqQuestion: {
     flex: 1,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
     color: "#1A1A1A",
     paddingRight: 12,
   },
@@ -498,10 +552,21 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#F0F0F0",
   },
-  faqAnswer: {
+  faqAnswer: { fontSize: 13, color: "#555", lineHeight: 22 },
+
+  // ===== EMPTY =====
+  emptyContainer: { alignItems: "center", paddingVertical: 40 },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    marginTop: 12,
+  },
+  emptySubtitle: {
     fontSize: 13,
     color: "#888888",
-    lineHeight: 20,
+    marginTop: 4,
+    textAlign: "center",
   },
 
   // ===== HUBUNGI KAMI =====
@@ -521,11 +586,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E8E8E8",
   },
-  contactLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
+  contactLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
   contactIconContainer: {
     width: 44,
     height: 44,
@@ -535,33 +596,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  contactContent: {
-    flex: 1,
-  },
-  contactTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1A1A1A",
-  },
-  contactSubtitle: {
-    fontSize: 12,
-    color: "#888888",
-    marginTop: 2,
-  },
+  contactContent: { flex: 1 },
+  contactTitle: { fontSize: 14, fontWeight: "600", color: "#1A1A1A" },
+  contactSubtitle: { fontSize: 12, color: "#888888", marginTop: 2 },
   contactButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2D7D46",
+    backgroundColor: "#25D366",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 12,
     gap: 6,
   },
-  contactButtonText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "500",
-  },
+  contactButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
 
   // ===== FOOTER =====
   footer: {

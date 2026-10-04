@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
+import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +19,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getProfil, saveProfil } from "../utils/storage";
+import { supabase } from "../utils/supabase";
 
 export default function EditProfilScreen() {
   const insets = useSafeAreaInsets();
@@ -29,8 +32,10 @@ export default function EditProfilScreen() {
   const [alamat, setAlamat] = useState("");
   const [namaMasjid, setNamaMasjid] = useState("");
   const [jabatan, setJabatan] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [foto, setFoto] = useState<string | null>(null);
+  const [fotoLama, setFotoLama] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   // ===== ANIMASI =====
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -61,6 +66,53 @@ export default function EditProfilScreen() {
     ]).start();
   }, []);
 
+  // ===== LOAD PROFIL DARI SUPABASE =====
+  const loadProfil = useCallback(async () => {
+    setIsDataLoading(true);
+    try {
+      // 1. Ambil user dari Auth
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace("/");
+        return;
+      }
+
+      // 2. Set default dari user metadata
+      setEmail(user.email || "");
+      setNama(user.user_metadata?.name || "");
+      setNomorHP(user.user_metadata?.phone || "");
+      setJabatan(user.user_metadata?.role || "");
+
+      // 3. Load profil dari tabel profil
+      const profilData = await getProfil();
+      console.log("Edit Profil - Data:", profilData);
+
+      if (profilData) {
+        setNama(profilData.nama || "");
+        setEmail(profilData.email || user.email || "");
+        setNomorHP(profilData.nomor_hp || "");
+        setAlamat(profilData.alamat || "");
+        setNamaMasjid(profilData.nama_masjid || "");
+        setJabatan(profilData.jabatan || "");
+        setFotoLama(profilData.foto_url || null);
+        setFoto(profilData.foto_url || null);
+      }
+    } catch (error) {
+      console.error("Error loading profil:", error);
+    } finally {
+      setIsDataLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfil();
+    }, [loadProfil]),
+  );
+
   // ===== FUNGSI =====
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -78,23 +130,92 @@ export default function EditProfilScreen() {
     }).start();
   };
 
+  // ===== FOTO PROFIL =====
   const handleUbahFoto = () => {
     Alert.alert("Ubah Foto", "Pilih sumber foto", [
       {
         text: "Kamera",
-        onPress: () =>
-          Alert.alert("Kamera", "Fungsi kamera akan segera tersedia"),
+        onPress: () => ambilFoto("camera"),
       },
       {
         text: "Galeri",
-        onPress: () =>
-          Alert.alert("Galeri", "Fungsi galeri akan segera tersedia"),
+        onPress: () => ambilFoto("gallery"),
       },
       { text: "Batal", style: "cancel" },
     ]);
   };
 
-  const handleSimpan = () => {
+  const ambilFoto = async (source: "camera" | "gallery") => {
+    try {
+      // Minta izin
+      if (source === "camera") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Diperlukan", "Izin kamera diperlukan");
+          return;
+        }
+      } else {
+        const { status } =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Diperlukan", "Izin galeri diperlukan");
+          return;
+        }
+      }
+
+      // Buka kamera / galeri
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.5,
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.5,
+            });
+
+      if (!result.canceled) {
+        setFoto(result.assets[0].uri);
+      }
+    } catch (error: any) {
+      console.error("Error ambil foto:", error);
+      Alert.alert("Gagal", "Tidak dapat mengambil foto");
+    }
+  };
+
+  // ===== UPLOAD FOTO KE SUPABASE STORAGE =====
+  const uploadFoto = async (uri: string, userId: string): Promise<string> => {
+    const fileName = `profil/${userId}-${Date.now()}.jpg`;
+    const response = await fetch(uri);
+    const arrayBuffer = await response.arrayBuffer();
+
+    const { data, error } = await supabase.storage
+      .from("barang")
+      .upload(fileName, arrayBuffer, {
+        contentType: "image/jpeg",
+        upsert: true,
+      });
+
+    if (error) {
+      console.error("Upload error:", error);
+      throw new Error(`Upload gagal: ${error.message}`);
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("barang")
+      .getPublicUrl(fileName);
+
+    return urlData.publicUrl;
+  };
+
+  // ===== SIMPAN PROFIL =====
+  const handleSimpan = async () => {
+    // Validasi
     if (!nama.trim()) {
       Alert.alert("Validasi", "Harap isi data nama lengkap");
       return;
@@ -117,12 +238,57 @@ export default function EditProfilScreen() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      // 1. Ambil user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert("Error", "Anda harus login terlebih dahulu");
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Upload foto kalau ada perubahan
+      let fotoUrl = fotoLama;
+      if (foto && foto !== fotoLama) {
+        console.log("Upload foto baru...");
+        fotoUrl = await uploadFoto(foto, user.id);
+        console.log("Foto URL:", fotoUrl);
+      }
+
+      // 3. Simpan profil ke Supabase
+      const result = await saveProfil({
+        nama: nama,
+        email: email,
+        nomor_hp: nomorHP,
+        alamat: alamat,
+        nama_masjid: namaMasjid,
+        jabatan: jabatan,
+        foto_url: fotoUrl,
+      });
+
+      console.log("Profil tersimpan:", result);
+
+      // 4. Update user metadata juga
+      await supabase.auth.updateUser({
+        data: {
+          name: nama,
+          phone: nomorHP,
+          role: jabatan,
+        },
+      });
+
       setIsLoading(false);
       Alert.alert("Berhasil! ✅", "Profil berhasil diperbarui", [
         { text: "OK", onPress: () => router.back() },
       ]);
-    }, 1500);
+    } catch (error: any) {
+      console.error("Error simpan profil:", error);
+      setIsLoading(false);
+      Alert.alert("Gagal", error.message || "Terjadi kesalahan. Coba lagi.");
+    }
   };
 
   const handleBatal = () => {
@@ -136,72 +302,69 @@ export default function EditProfilScreen() {
     );
   };
 
-  // ===== FIELD DATA (useMemo biar ga re-render) =====
-  const fields = useMemo(
-    () => [
-      {
-        id: "nama",
-        label: "Nama Lengkap",
-        icon: "person-outline",
-        placeholder: "Masukkan nama lengkap",
-        value: nama,
-        onChange: setNama,
-        keyboard: "default",
-        ref: inputNamaRef,
-        returnKey: "next",
-        onSubmit: () => inputEmailRef.current?.focus(),
-      },
-      {
-        id: "email",
-        label: "Email",
-        icon: "mail-outline",
-        placeholder: "Masukkan email",
-        value: email,
-        onChange: setEmail,
-        keyboard: "email-address",
-        autoCapitalize: "none",
-        ref: inputEmailRef,
-        returnKey: "next",
-        onSubmit: () => inputNomorRef.current?.focus(),
-      },
-      {
-        id: "nomorHP",
-        label: "Nomor HP",
-        icon: "call-outline",
-        placeholder: "Masukkan nomor HP",
-        value: nomorHP,
-        onChange: setNomorHP,
-        keyboard: "numeric",
-        ref: inputNomorRef,
-        returnKey: "next",
-        onSubmit: () => inputAlamatRef.current?.focus(),
-      },
-      {
-        id: "namaMasjid",
-        label: "Nama Masjid",
-        icon: "home-outline",
-        placeholder: "Masukkan nama masjid",
-        value: namaMasjid,
-        onChange: setNamaMasjid,
-        keyboard: "default",
-        ref: inputMasjidRef,
-        returnKey: "next",
-        onSubmit: () => inputJabatanRef.current?.focus(),
-      },
-      {
-        id: "jabatan",
-        label: "Jabatan",
-        icon: "briefcase-outline",
-        placeholder: "Contoh: Ketua DKM",
-        value: jabatan,
-        onChange: setJabatan,
-        keyboard: "default",
-        ref: inputJabatanRef,
-        returnKey: "done",
-      },
-    ],
-    [nama, email, nomorHP, namaMasjid, jabatan],
-  );
+  // ===== FIELD DATA =====
+  const fields = [
+    {
+      id: "nama",
+      label: "Nama Lengkap",
+      icon: "person-outline",
+      placeholder: "Masukkan nama lengkap",
+      value: nama,
+      onChange: setNama,
+      keyboard: "default",
+      ref: inputNamaRef,
+      returnKey: "next",
+      onSubmit: () => inputEmailRef.current?.focus(),
+    },
+    {
+      id: "email",
+      label: "Email",
+      icon: "mail-outline",
+      placeholder: "Masukkan email",
+      value: email,
+      onChange: setEmail,
+      keyboard: "email-address",
+      autoCapitalize: "none",
+      ref: inputEmailRef,
+      returnKey: "next",
+      onSubmit: () => inputNomorRef.current?.focus(),
+    },
+    {
+      id: "nomorHP",
+      label: "Nomor HP",
+      icon: "call-outline",
+      placeholder: "Masukkan nomor HP",
+      value: nomorHP,
+      onChange: setNomorHP,
+      keyboard: "numeric",
+      ref: inputNomorRef,
+      returnKey: "next",
+      onSubmit: () => inputAlamatRef.current?.focus(),
+    },
+    {
+      id: "namaMasjid",
+      label: "Nama Masjid",
+      icon: "home-outline",
+      placeholder: "Masukkan nama masjid",
+      value: namaMasjid,
+      onChange: setNamaMasjid,
+      keyboard: "default",
+      ref: inputMasjidRef,
+      returnKey: "next",
+      onSubmit: () => inputJabatanRef.current?.focus(),
+    },
+    {
+      id: "jabatan",
+      label: "Jabatan",
+      icon: "briefcase-outline",
+      placeholder: "Contoh: Ketua DKM",
+      value: jabatan,
+      onChange: setJabatan,
+      keyboard: "default",
+      ref: inputJabatanRef,
+      returnKey: "done",
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -231,7 +394,11 @@ export default function EditProfilScreen() {
               <Text style={styles.headerTitle}>Edit Profil</Text>
               <Text style={styles.headerSubtitle}>Perbarui informasi akun</Text>
             </View>
-            <TouchableOpacity style={styles.saveButton} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              activeOpacity={0.7}
+              onPress={handleSimpan}
+            >
               <Ionicons name="checkmark" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
@@ -278,61 +445,78 @@ export default function EditProfilScreen() {
             <View style={styles.infoCard}>
               <Text style={styles.infoTitle}>Informasi Profil</Text>
 
-              {/* ===== ALAMAT ===== */}
-              <View style={styles.inputWrapper}>
-                <Text style={styles.label}>Alamat</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons
-                    name="location-outline"
-                    size={18}
-                    color="#8A8A8A"
-                    style={{ marginTop: 2 }}
-                  />
-                  <TextInput
-                    ref={inputAlamatRef}
-                    style={[styles.input, styles.textArea]}
-                    placeholder="Masukkan alamat"
-                    placeholderTextColor="#B0B0B0"
-                    value={alamat}
-                    onChangeText={setAlamat}
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                    returnKeyType="next"
-                    onSubmitEditing={() => inputNamaRef.current?.focus()}
-                    blurOnSubmit={false}
-                  />
+              {isDataLoading ? (
+                <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                  <ActivityIndicator size="large" color="#2D7D46" />
+                  <Text
+                    style={{
+                      marginTop: 12,
+                      color: "#888",
+                      fontSize: 14,
+                    }}
+                  >
+                    Memuat data...
+                  </Text>
                 </View>
-              </View>
-
-              {/* ===== FIELD LAINNYA ===== */}
-              {fields.map((field) => (
-                <View key={field.id} style={styles.inputWrapper}>
-                  <Text style={styles.label}>{field.label}</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons
-                      name={field.icon as any}
-                      size={18}
-                      color="#8A8A8A"
-                    />
-                    <TextInput
-                      ref={field.ref}
-                      style={styles.input}
-                      placeholder={field.placeholder}
-                      placeholderTextColor="#B0B0B0"
-                      value={field.value}
-                      onChangeText={field.onChange}
-                      keyboardType={field.keyboard as any}
-                      autoCapitalize={
-                        (field.autoCapitalize as any) || "sentences"
-                      }
-                      returnKeyType={field.returnKey}
-                      onSubmitEditing={field.onSubmit}
-                      blurOnSubmit={false}
-                    />
+              ) : (
+                <>
+                  {/* ===== ALAMAT ===== */}
+                  <View style={styles.inputWrapper}>
+                    <Text style={styles.label}>Alamat</Text>
+                    <View style={styles.inputContainer}>
+                      <Ionicons
+                        name="location-outline"
+                        size={18}
+                        color="#8A8A8A"
+                        style={{ marginTop: 2 }}
+                      />
+                      <TextInput
+                        ref={inputAlamatRef}
+                        style={[styles.input, styles.textArea]}
+                        placeholder="Masukkan alamat"
+                        placeholderTextColor="#B0B0B0"
+                        value={alamat}
+                        onChangeText={setAlamat}
+                        multiline
+                        numberOfLines={3}
+                        textAlignVertical="top"
+                        returnKeyType="next"
+                        onSubmitEditing={() => inputNamaRef.current?.focus()}
+                        blurOnSubmit={false}
+                      />
+                    </View>
                   </View>
-                </View>
-              ))}
+
+                  {/* ===== FIELD LAINNYA ===== */}
+                  {fields.map((field) => (
+                    <View key={field.id} style={styles.inputWrapper}>
+                      <Text style={styles.label}>{field.label}</Text>
+                      <View style={styles.inputContainer}>
+                        <Ionicons
+                          name={field.icon as any}
+                          size={18}
+                          color="#8A8A8A"
+                        />
+                        <TextInput
+                          ref={field.ref}
+                          style={styles.input}
+                          placeholder={field.placeholder}
+                          placeholderTextColor="#B0B0B0"
+                          value={field.value}
+                          onChangeText={field.onChange}
+                          keyboardType={field.keyboard as any}
+                          autoCapitalize={
+                            (field.autoCapitalize as any) || "sentences"
+                          }
+                          returnKeyType={field.returnKey as any}
+                          onSubmitEditing={field.onSubmit}
+                          blurOnSubmit={false}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
             </View>
 
             {/* ===== TOMBOL AKSI ===== */}
@@ -376,22 +560,10 @@ export default function EditProfilScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
 
   // ===== HEADER =====
   headerContainer: {
@@ -469,11 +641,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -511,14 +679,8 @@ const styles = StyleSheet.create({
   },
 
   // ===== FOTO PROFIL =====
-  photoSection: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  avatarContainer: {
-    position: "relative",
-    alignItems: "center",
-  },
+  photoSection: { alignItems: "center", marginBottom: 20 },
+  avatarContainer: { position: "relative", alignItems: "center" },
   avatar: {
     width: 100,
     height: 100,
@@ -528,12 +690,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 3,
     borderColor: "#2D7D46",
+    overflow: "hidden",
   },
-  avatarImage: {
-    width: 94,
-    height: 94,
-    borderRadius: 47,
-  },
+  avatarImage: { width: 94, height: 94, borderRadius: 47 },
   changePhotoButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -549,16 +708,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  changePhotoText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "500",
-  },
+  changePhotoText: { color: "#FFFFFF", fontSize: 12, fontWeight: "500" },
 
   // ===== INFO CARD =====
-  infoCard: {
-    marginTop: 4,
-  },
+  infoCard: { marginTop: 4 },
   infoTitle: {
     fontSize: 16,
     fontWeight: "bold",
@@ -567,15 +720,8 @@ const styles = StyleSheet.create({
   },
 
   // ===== INPUT =====
-  inputWrapper: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 5,
-  },
+  inputWrapper: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: "600", color: "#333", marginBottom: 5 },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -622,11 +768,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#C9A84C",
-  },
+  cancelButtonText: { fontSize: 14, fontWeight: "600", color: "#C9A84C" },
   submitButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -643,9 +785,5 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
-  submitButtonText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
+  submitButtonText: { fontSize: 14, fontWeight: "bold", color: "#FFFFFF" },
 });

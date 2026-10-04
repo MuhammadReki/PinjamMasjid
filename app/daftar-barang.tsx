@@ -87,7 +87,7 @@ export default function DaftarBarangScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.8,
+      quality: 0.5,
     });
 
     if (!result.canceled) {
@@ -148,14 +148,22 @@ export default function DaftarBarangScreen() {
     try {
       // ===== 1. UPLOAD FOTO KE SUPABASE STORAGE =====
       const fileName = `barang/${Date.now()}.jpg`;
+
+      // 🔥 Convert foto URI ke ArrayBuffer (fix bug RN)
       const response = await fetch(foto);
-      const blob = await response.blob();
+      const arrayBuffer = await response.arrayBuffer();
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("barang")
-        .upload(fileName, blob);
+        .upload(fileName, arrayBuffer, {
+          contentType: "image/jpeg",
+          upsert: false,
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Upload error detail:", uploadError);
+        throw new Error(`Upload gagal: ${uploadError.message}`);
+      }
 
       // Dapatkan URL publik
       const { data: urlData } = supabase.storage
@@ -174,7 +182,7 @@ export default function DaftarBarangScreen() {
           harga: parseInt(hargaBersih) || 0,
           kondisi: kondisi,
           foto_url: fotoUrl,
-          created_by: user.id, // 🔥 PAKE UID DARI SUPABASE
+          created_by: user.id,
         })
         .select();
 

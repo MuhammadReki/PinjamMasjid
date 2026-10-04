@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Image,
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,15 +15,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// 🔥 IMPORT LOGO (SAMA KAYAK SPLASH SCREEN)
 const LOGO_URL = "https://i.ibb.co.com/gZhskXq5/Logo-Pinjam-Masjid.png";
+const DEV_PHOTO = "https://i.ibb.co.com/W4HvRjmr/Muhammad-Reki.jpg";
 
 export default function TentangScreen() {
   const insets = useSafeAreaInsets();
 
-  // ===== STATE =====
-  const [isExpanded, setIsExpanded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [devImageError, setDevImageError] = useState(false);
 
   // ===== ANIMASI =====
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -46,7 +46,6 @@ export default function TentangScreen() {
       }),
     ]).start();
 
-    // Logo animation
     Animated.sequence([
       Animated.timing(logoFadeAnim, {
         toValue: 1,
@@ -62,7 +61,6 @@ export default function TentangScreen() {
     ]).start();
   }, []);
 
-  // ===== FUNGSI =====
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 0.95,
@@ -77,6 +75,18 @@ export default function TentangScreen() {
       useNativeDriver: true,
       speed: 50,
     }).start();
+  };
+
+  // ===== BUKA LINK =====
+  const openLink = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      console.error("Error opening link:", error);
+    }
   };
 
   return (
@@ -119,7 +129,7 @@ export default function TentangScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* ===== KARTU LOGO ===== */}
+          {/* ===== LOGO CARD ===== */}
           <Animated.View
             style={[
               styles.logoCard,
@@ -138,7 +148,6 @@ export default function TentangScreen() {
                 },
               ]}
             >
-              {/* 🔥 LOGO KOTAK MODERN (SAMA KAYAK SPLASH) */}
               <View style={styles.logoBox}>
                 <Image
                   source={{ uri: LOGO_URL }}
@@ -187,6 +196,47 @@ export default function TentangScreen() {
             </Text>
           </Animated.View>
 
+          {/* ===== FITUR UTAMA ===== */}
+          <Animated.View
+            style={[
+              styles.card,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <Text style={styles.cardTitle}>✨ Fitur Utama</Text>
+
+            <View style={styles.featureList}>
+              {[
+                { icon: "cube-outline", text: "Manajemen Inventaris Barang" },
+                {
+                  icon: "calendar-outline",
+                  text: "Buat & Kelola Acara Masjid",
+                },
+                { icon: "location-outline", text: "Deteksi Lokasi Otomatis" },
+                {
+                  icon: "document-text-outline",
+                  text: "Export Laporan PDF & Excel",
+                },
+                { icon: "people-outline", text: "Multi-User dengan Role" },
+                { icon: "cloud-outline", text: "Data Tersimpan di Cloud" },
+              ].map((feature, index) => (
+                <View key={index} style={styles.featureItem}>
+                  <View style={styles.featureIconContainer}>
+                    <Ionicons
+                      name={feature.icon as any}
+                      size={18}
+                      color="#2D7D46"
+                    />
+                  </View>
+                  <Text style={styles.featureText}>{feature.text}</Text>
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+
           {/* ===== VISI MISI ===== */}
           <Animated.View
             style={[
@@ -223,6 +273,37 @@ export default function TentangScreen() {
             </View>
           </Animated.View>
 
+          {/* ===== TEKNOLOGI ===== */}
+          <Animated.View
+            style={[
+              styles.card,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <Text style={styles.cardTitle}>🛠️ Dibangun Dengan</Text>
+
+            <View style={styles.techGrid}>
+              {[
+                { label: "React Native", color: "#61DAFB" },
+                { label: "Expo", color: "#000020" },
+                { label: "TypeScript", color: "#3178C6" },
+                { label: "Supabase", color: "#3ECF8E" },
+                { label: "Expo Router", color: "#4630EB" },
+                { label: "Expo Location", color: "#0EA5E9" },
+              ].map((tech, index) => (
+                <View key={index} style={styles.techBadge}>
+                  <View
+                    style={[styles.techDot, { backgroundColor: tech.color }]}
+                  />
+                  <Text style={styles.techText}>{tech.label}</Text>
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+
           {/* ===== PEMBUAT ===== */}
           <Animated.View
             style={[
@@ -239,12 +320,17 @@ export default function TentangScreen() {
             </View>
 
             <View style={styles.developerContent}>
-              <Image
-                source={{
-                  uri: "https://i.ibb.co.com/W4HvRjmr/Muhammad-Reki.jpg",
-                }}
-                style={styles.developerAvatar}
-              />
+              {devImageError ? (
+                <View style={styles.developerAvatar}>
+                  <Ionicons name="person" size={32} color="#FFFFFF" />
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: DEV_PHOTO }}
+                  style={styles.developerAvatar}
+                  onError={() => setDevImageError(true)}
+                />
+              )}
               <View style={styles.developerInfo}>
                 <Text style={styles.developerName}>Muhammad Reki</Text>
                 <Text style={styles.developerRole}>Mobile App Developer</Text>
@@ -261,6 +347,55 @@ export default function TentangScreen() {
                 "Terima kasih telah menggunakan PinjamMasjid"
               </Text>
             </View>
+
+            {/* Kontak Developer */}
+            <View style={styles.contactRow}>
+              <TouchableOpacity
+                style={styles.contactIconButton}
+                onPress={() => openLink("mailto:mreki2022@gmail.com")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="mail-outline" size={20} color="#2D7D46" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.contactIconButton}
+                onPress={() => openLink("https://github.com/MuhammadReki")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="logo-github" size={20} color="#2D7D46" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.contactIconButton}
+                onPress={() => openLink("https://instagram.com/muhammad.reki_")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="logo-instagram" size={20} color="#2D7D46" />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {/* ===== TERIMA KASIH ===== */}
+          <Animated.View
+            style={[
+              styles.card,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <Text style={styles.cardTitle}>🤝 Terima Kasih</Text>
+            <Text style={styles.cardDescription}>
+              Aplikasi ini tidak akan terwujud tanpa dukungan dari:
+              {"\n\n"}
+              🕌 <Text style={styles.boldText}>Masjid An-Nur Payakumbuh</Text>
+              {"\n"}
+              👥 <Text style={styles.boldText}>Pengurus DKM</Text>
+              {"\n"}
+              👨‍👩‍👦 <Text style={styles.boldText}>Keluarga & Sahabat</Text>
+              {"\n"}
+              💻 <Text style={styles.boldText}>Komunitas Developer</Text>
+            </Text>
           </Animated.View>
 
           {/* ===== FOOTER ===== */}
@@ -277,22 +412,10 @@ export default function TentangScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
 
   // ===== HEADER =====
   headerContainer: {
@@ -370,11 +493,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -405,15 +524,9 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     marginTop: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
     elevation: 4,
   },
-  logoContainer: {
-    alignItems: "center",
-  },
+  logoContainer: { alignItems: "center" },
   logoBox: {
     width: 120,
     height: 120,
@@ -423,17 +536,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 2,
     borderColor: "rgba(45, 125, 70, 0.15)",
-    shadowColor: "#2D7D46",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
     overflow: "hidden",
   },
-  logoImage: {
-    width: 90,
-    height: 90,
-  },
+  logoImage: { width: 90, height: 90 },
   logoFallback: {
     position: "absolute",
     width: 120,
@@ -443,9 +548,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  logoFallbackText: {
-    fontSize: 48,
-  },
+  logoFallbackText: { fontSize: 48 },
   appName: {
     fontSize: 26,
     fontWeight: "bold",
@@ -466,11 +569,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginTop: 10,
   },
-  versionText: {
-    fontSize: 12,
-    color: "#888888",
-    fontWeight: "500",
-  },
+  versionText: { fontSize: 12, color: "#888888", fontWeight: "500" },
 
   // ===== CARD =====
   card: {
@@ -478,29 +577,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginTop: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
     elevation: 2,
     borderWidth: 1,
     borderColor: "#E8E8E8",
   },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  cardIconContainer: {
-    marginRight: 10,
-  },
-  cardIcon: {
-    fontSize: 20,
-  },
+  cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  cardIconContainer: { marginRight: 10 },
+  cardIcon: { fontSize: 20 },
   cardTitle: {
     fontSize: 16,
     fontWeight: "bold",
     color: "#1A1A1A",
+    marginBottom: 8,
   },
   cardDescription: {
     fontSize: 14,
@@ -508,11 +596,28 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: "justify",
   },
+  boldText: { fontWeight: "bold", color: "#1A1A1A" },
+
+  // ===== FITUR =====
+  featureList: { marginTop: 8 },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  featureIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#E8F5EA",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  featureText: { flex: 1, fontSize: 14, color: "#333", fontWeight: "500" },
 
   // ===== VISI MISI =====
-  visiContainer: {
-    marginBottom: 16,
-  },
+  visiContainer: { marginBottom: 16 },
   visiLabel: {
     fontSize: 13,
     fontWeight: "600",
@@ -526,20 +631,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "justify",
   },
-  misiContainer: {
-    marginTop: 4,
-  },
+  misiContainer: { marginTop: 4 },
   misiLabel: {
     fontSize: 13,
     fontWeight: "600",
     color: "#C9A84C",
     marginBottom: 6,
   },
-  misiItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 4,
-  },
+  misiItem: { flexDirection: "row", alignItems: "flex-start", marginBottom: 4 },
   misiDot: {
     width: 6,
     height: 6,
@@ -548,12 +647,22 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginRight: 10,
   },
-  misiText: {
-    flex: 1,
-    fontSize: 13,
-    color: "#666",
-    lineHeight: 18,
+  misiText: { flex: 1, fontSize: 13, color: "#666", lineHeight: 18 },
+
+  // ===== TECH =====
+  techGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  techBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F9F7",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
   },
+  techDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  techText: { fontSize: 12, color: "#333", fontWeight: "500" },
 
   // ===== DEVELOPER =====
   developerCard: {
@@ -561,10 +670,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginTop: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
     elevation: 2,
     borderWidth: 1,
     borderColor: "#E8E8E8",
@@ -593,20 +698,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  developerInfo: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  developerName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1A1A1A",
-  },
-  developerRole: {
-    fontSize: 13,
-    color: "#888888",
-    marginTop: 2,
-  },
+  developerInfo: { flex: 1, marginLeft: 14 },
+  developerName: { fontSize: 16, fontWeight: "600", color: "#1A1A1A" },
+  developerRole: { fontSize: 13, color: "#888888", marginTop: 2 },
   developerBadge: {
     backgroundColor: "#FFF8E1",
     paddingHorizontal: 10,
@@ -615,22 +709,28 @@ const styles = StyleSheet.create({
     marginTop: 4,
     alignSelf: "flex-start",
   },
-  developerBadgeText: {
-    fontSize: 10,
-    color: "#C9A84C",
-    fontWeight: "500",
-  },
+  developerBadgeText: { fontSize: 10, color: "#C9A84C", fontWeight: "500" },
   developerMessage: {
     backgroundColor: "#F5F9F7",
     borderRadius: 12,
     padding: 12,
     borderLeftWidth: 3,
     borderLeftColor: "#2D7D46",
+    marginBottom: 14,
   },
-  developerMessageText: {
-    fontSize: 13,
-    color: "#2D7D46",
-    fontStyle: "italic",
+  developerMessageText: { fontSize: 13, color: "#2D7D46", fontStyle: "italic" },
+
+  // ===== CONTACT ROW =====
+  contactRow: { flexDirection: "row", justifyContent: "center", gap: 12 },
+  contactIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#F5F9F7",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
   },
 
   // ===== FOOTER =====

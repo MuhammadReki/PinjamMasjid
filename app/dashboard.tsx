@@ -13,7 +13,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getEvents, getItems } from "../utils/storage";
+import { getEvents, getItems, getProfil } from "../utils/storage";
+import { supabase } from "../utils/supabase";
 
 // ===== DATA AYAT (HANYA ARTI/TERJEMAHAN) =====
 const AYAT_API_URL = "https://api.alquran.cloud/v1/ayah/";
@@ -61,6 +62,41 @@ const defaultAyat = [
   },
 ];
 
+// ===== HELPER: PARSE TANGGAL =====
+const parseTanggalIndonesia = (dateStr: string): Date | null => {
+  if (!dateStr) return null;
+
+  try {
+    const parts = dateStr.replace(/^[^,]+,\s*/, "").split(" ");
+    const day = parseInt(parts[0]);
+    const monthNames = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
+    const month = monthNames.indexOf(parts[1]);
+    const year = parseInt(parts[2]);
+
+    if (isNaN(day) || month === -1 || isNaN(year)) return null;
+
+    const date = new Date(year, month, day);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  } catch (error) {
+    console.error("Error parsing tanggal:", dateStr, error);
+    return null;
+  }
+};
+
 export default function DashboardScreen() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -72,9 +108,8 @@ export default function DashboardScreen() {
   const [ayat, setAyat] = useState(defaultAyat[0]);
   const [ayatIndex, setAyatIndex] = useState(0);
   const [ayatLoading, setAyatLoading] = useState(true);
-  const [user, setUser] = useState<{ name?: string; role?: string } | null>(
-    null,
-  );
+  const [user, setUser] = useState<any>(null);
+  const [profil, setProfil] = useState<any>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);
 
   // ===== ANIMASI =====
@@ -131,7 +166,7 @@ export default function DashboardScreen() {
     loadAyat();
   }, []);
 
-  // ===== LOAD DATA DARI STORAGE =====
+  // ===== LOAD DATA DARI SUPABASE =====
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -139,6 +174,8 @@ export default function DashboardScreen() {
         getItems(),
         getEvents(),
       ]);
+      console.log("Dashboard - Barang:", barangData?.length);
+      console.log("Dashboard - Acara:", acaraData?.length);
       setItems(barangData || []);
       setEvents(acaraData || []);
     } catch (error) {
@@ -148,32 +185,57 @@ export default function DashboardScreen() {
     }
   }, []);
 
-  // ===== LOAD USER DATA =====
-  useEffect(() => {
-    const loadUser = async () => {
-      setIsUserLoading(true);
-      try {
-        setUser(null);
-      } catch (error) {
-        console.error("Error loading user:", error);
-      } finally {
-        setIsUserLoading(false);
+  // ===== LOAD USER DATA DARI SUPABASE =====
+  const loadUser = useCallback(async () => {
+    setIsUserLoading(true);
+    try {
+      // 1. Ambil user dari Auth
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      console.log("Dashboard - User:", authUser?.email);
+      setUser(authUser);
+
+      // 2. Ambil profil dari tabel profil
+      if (authUser) {
+        const profilData = await getProfil();
+        console.log("Dashboard - Profil:", profilData);
+        setProfil(profilData);
       }
-    };
-    loadUser();
+    } catch (error) {
+      console.error("Error loading user:", error);
+      setUser(null);
+    } finally {
+      setIsUserLoading(false);
+    }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData]),
+      loadUser();
+    }, [loadData, loadUser]),
   );
 
   // ===== DATA STATISTIK =====
   const stats = useMemo(() => {
     const today = new Date();
-    const upcomingEvents = events.filter(
-      (e) => new Date(e.tanggalMulai) >= today,
+    today.setHours(0, 0, 0, 0);
+
+    // Filter acara mendatang
+    const upcomingEvents = events.filter((e) => {
+      const dateStr = e.tanggal_mulai || e.tanggalMulai;
+      const eventDate = parseTanggalIndonesia(dateStr);
+      if (!eventDate) return false;
+      return eventDate >= today;
+    });
+
+    console.log(
+      "Upcoming events:",
+      upcomingEvents.length,
+      "dari",
+      events.length,
     );
 
     return [
@@ -327,6 +389,21 @@ export default function DashboardScreen() {
 
   const notificationCount = 3;
 
+  // ===== HELPER: NAMA USER =====
+  const getDisplayName = () => {
+    // Prioritas: profil.nama > user_metadata.name > email
+    if (profil?.nama) return profil.nama;
+    if (user?.user_metadata?.name) return user.user_metadata.name;
+    if (user?.email) return user.email.split("@")[0];
+    return "Pengguna";
+  };
+
+  const getJabatan = () => {
+    if (profil?.jabatan) return profil.jabatan;
+    if (user?.user_metadata?.role) return user.user_metadata.role;
+    return null;
+  };
+
   // ===== RENDER HEADER USER =====
   const renderUserHeader = () => {
     if (isUserLoading) {
@@ -338,20 +415,11 @@ export default function DashboardScreen() {
       );
     }
 
-    if (user?.name) {
-      return (
-        <View>
-          <Text style={styles.greeting}>Assalamualaikum</Text>
-          <Text style={styles.userName}>{user.name}</Text>
-          {user.role && <Text style={styles.userRole}>{user.role}</Text>}
-        </View>
-      );
-    }
-
     return (
       <View>
-        <Text style={styles.greeting}>Assalamualaikum</Text>
-        <Text style={styles.userName}>Selamat datang di PinjamMasjid</Text>
+        <Text style={styles.greeting}>Assalamualaikum,</Text>
+        <Text style={styles.userName}>{getDisplayName()}</Text>
+        {getJabatan() && <Text style={styles.userRole}>{getJabatan()}</Text>}
       </View>
     );
   };
@@ -587,17 +655,9 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollContent: { paddingBottom: 20 },
 
   // ===== HEADER =====
   headerContainer: {
@@ -667,10 +727,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 1,
   },
-  headerLeft: {
-    flex: 1,
-    paddingRight: 8,
-  },
+  headerLeft: { flex: 1, paddingRight: 8 },
   greeting: {
     fontSize: 11,
     color: "rgba(255,255,255,0.85)",
@@ -691,9 +748,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
     fontWeight: "400",
   },
-  headerRight: {
-    paddingTop: 0,
-  },
+  headerRight: { paddingTop: 0 },
   notificationButton: {
     width: 34,
     height: 34,
@@ -715,11 +770,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  notificationBadgeText: {
-    fontSize: 8,
-    color: "#FFFFFF",
-    fontWeight: "bold",
-  },
+  notificationBadgeText: { fontSize: 8, color: "#FFFFFF", fontWeight: "bold" },
 
   // ===== KARTU SELAMAT DATANG =====
   welcomeCard: {
@@ -739,15 +790,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  welcomeTextContainer: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  welcomeLabel: {
-    fontSize: 10,
-    color: "#999",
-    fontWeight: "400",
-  },
+  welcomeTextContainer: { flex: 1, paddingRight: 10 },
+  welcomeLabel: { fontSize: 10, color: "#999", fontWeight: "400" },
   welcomeTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -786,16 +830,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
     gap: 4,
   },
-  verseDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: "#DDD",
-  },
-  verseDotActive: {
-    backgroundColor: "#2D7D46",
-    width: 12,
-  },
+  verseDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: "#DDD" },
+  verseDotActive: { backgroundColor: "#2D7D46", width: 12 },
 
   // ===== ILUSTRASI MASJID =====
   mosqueIllustration: {
@@ -864,11 +900,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
   },
-  crescentIcon: {
-    position: "absolute",
-    top: -2,
-    right: 0,
-  },
+  crescentIcon: { position: "absolute", top: -2, right: 0 },
 
   // ===== SECTION HEADER =====
   sectionHeader: {
@@ -879,16 +911,8 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 8,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-  },
-  sectionLink: {
-    fontSize: 12,
-    color: "#2D7D46",
-    fontWeight: "500",
-  },
+  sectionTitle: { fontSize: 16, fontWeight: "bold", color: "#1A1A1A" },
+  sectionLink: { fontSize: 12, color: "#2D7D46", fontWeight: "500" },
 
   // ===== AKSI CEPAT =====
   quickActionsGrid: {
@@ -954,17 +978,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 4,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-  },
-  statLabel: {
-    fontSize: 10,
-    color: "#999",
-    marginTop: 1,
-    textAlign: "center",
-  },
+  statValue: { fontSize: 20, fontWeight: "bold", color: "#1A1A1A" },
+  statLabel: { fontSize: 10, color: "#999", marginTop: 1, textAlign: "center" },
 
   // ===== AKTIVITAS =====
   activityContainer: {
@@ -993,23 +1008,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginRight: 10,
   },
-  activityContent: {
-    flex: 1,
-  },
-  activityText: {
-    fontSize: 12,
-    color: "#333",
-    lineHeight: 16,
-  },
-  activityEmpty: {
-    color: "#999",
-    fontStyle: "italic",
-  },
-  activityTime: {
-    fontSize: 10,
-    color: "#B0B0B0",
-    marginTop: 2,
-  },
+  activityContent: { flex: 1 },
+  activityText: { fontSize: 12, color: "#333", lineHeight: 16 },
+  activityEmpty: { color: "#999", fontStyle: "italic" },
+  activityTime: { fontSize: 10, color: "#B0B0B0", marginTop: 2 },
 
   // ===== BOTTOM NAV =====
   bottomNav: {
@@ -1057,8 +1059,5 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: -0.2,
   },
-  navLabelActive: {
-    color: "#2D7D46",
-    fontWeight: "600",
-  },
+  navLabelActive: { color: "#2D7D46", fontWeight: "600" },
 });

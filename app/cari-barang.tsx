@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getItems } from "../utils/storage";
 
 export default function CariBarangScreen() {
   const insets = useSafeAreaInsets();
@@ -22,7 +25,8 @@ export default function CariBarangScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Semua");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [items, setItems] = useState<any[]>([]); // Kosong!
+  const [items, setItems] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // ===== ANIMASI =====
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -45,6 +49,26 @@ export default function CariBarangScreen() {
     ]).start();
   }, []);
 
+  // ===== LOAD DATA DARI SUPABASE =====
+  const loadItems = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await getItems();
+      console.log("Cari Barang - Data:", data?.length);
+      setItems(data || []);
+    } catch (error) {
+      console.error("Error loading items:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadItems();
+    }, [loadItems]),
+  );
+
   // ===== KATEGORI =====
   const categories = [
     "Semua",
@@ -54,6 +78,25 @@ export default function CariBarangScreen() {
     "Acara",
     "Lainnya",
   ];
+
+  // ===== FILTER & SEARCH =====
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      // Filter by search query
+      const matchSearch =
+        !searchQuery ||
+        item.nama?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.deskripsi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.lokasi?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Filter by kategori (kalau nanti ada kolom kategori)
+      const matchCategory =
+        selectedCategory === "Semua" ||
+        item.kategori?.toLowerCase() === selectedCategory.toLowerCase();
+
+      return matchSearch && matchCategory;
+    });
+  }, [items, searchQuery, selectedCategory]);
 
   // ===== FUNGSI =====
   const handlePressIn = () => {
@@ -72,6 +115,14 @@ export default function CariBarangScreen() {
     }).start();
   };
 
+  // ===== RENDER LOADING =====
+  const renderLoadingState = () => (
+    <View style={styles.emptyContainer}>
+      <ActivityIndicator size="large" color="#2D7D46" />
+      <Text style={styles.emptySubtitle}>Memuat barang...</Text>
+    </View>
+  );
+
   // ===== RENDER EMPTY STATE =====
   const renderEmptyState = () => (
     <Animated.View
@@ -84,25 +135,86 @@ export default function CariBarangScreen() {
       ]}
     >
       <View style={styles.emptyIconContainer}>
-        <Ionicons name="cube-outline" size={64} color="#C9A84C" />
+        <Ionicons
+          name={searchQuery ? "search-outline" : "cube-outline"}
+          size={64}
+          color="#C9A84C"
+        />
       </View>
-      <Text style={styles.emptyTitle}>Belum ada barang</Text>
-      <Text style={styles.emptySubtitle}>
-        Barang yang didaftarkan akan muncul di sini
+      <Text style={styles.emptyTitle}>
+        {searchQuery ? "Barang tidak ditemukan" : "Belum ada barang"}
       </Text>
-      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-        <TouchableOpacity
-          style={styles.emptyButton}
-          onPress={() => router.push("/daftar-barang")}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add" size={20} color="#FFFFFF" />
-          <Text style={styles.emptyButtonText}>Daftarkan Barang</Text>
-        </TouchableOpacity>
-      </Animated.View>
+      <Text style={styles.emptySubtitle}>
+        {searchQuery
+          ? `Tidak ada barang dengan nama "${searchQuery}"`
+          : "Barang yang didaftarkan akan muncul di sini"}
+      </Text>
+      {!searchQuery && (
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+          <TouchableOpacity
+            style={styles.emptyButton}
+            onPress={() => router.push("/daftar-barang")}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text style={styles.emptyButtonText}>Daftarkan Barang</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </Animated.View>
+  );
+
+  // ===== RENDER ITEM =====
+  const renderItem = ({ item }: { item: any }) => (
+    <TouchableOpacity style={styles.itemCard} activeOpacity={0.8}>
+      <View style={styles.itemHeader}>
+        <View style={styles.itemIconContainer}>
+          {item.foto_url ? (
+            <Image
+              source={{ uri: item.foto_url }}
+              style={{ width: 52, height: 52, borderRadius: 12 }}
+            />
+          ) : (
+            <Ionicons name="cube-outline" size={28} color="#2D7D46" />
+          )}
+        </View>
+        <View style={styles.itemInfo}>
+          <Text style={styles.itemName} numberOfLines={1}>
+            {item.nama || "Barang"}
+          </Text>
+          <Text style={styles.itemDetail} numberOfLines={1}>
+            📦 Jumlah: {item.jumlah || 0} buah
+          </Text>
+          <Text style={styles.itemDesc} numberOfLines={1}>
+            {item.deskripsi || "Tidak ada deskripsi"}
+          </Text>
+        </View>
+        <View style={styles.itemStatus}>
+          <Text style={styles.itemStatusText}>
+            {item.kondisi || "Tersedia"}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.itemFooter}>
+        <Text style={styles.itemDate}>
+          📅{" "}
+          {item.created_at
+            ? new Date(item.created_at).toLocaleDateString("id-ID", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })
+            : "-"}
+        </Text>
+        {item.harga > 0 && (
+          <Text style={styles.itemHarga}>
+            Rp {new Intl.NumberFormat("id-ID").format(item.harga)}
+          </Text>
+        )}
+      </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -128,7 +240,7 @@ export default function CariBarangScreen() {
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Cari Barang</Text>
               <Text style={styles.headerSubtitle}>
-                Cari barang atau pemilik...
+                {filteredItems.length} barang ditemukan
               </Text>
             </View>
             <TouchableOpacity style={styles.filterButton} activeOpacity={0.7}>
@@ -198,11 +310,14 @@ export default function CariBarangScreen() {
 
         {/* ===== DAFTAR BARANG ===== */}
         <FlatList
-          data={items}
-          keyExtractor={(item, index) => index.toString()}
-          renderItem={({ item }) => null}
-          ListEmptyComponent={renderEmptyState}
-          contentContainerStyle={styles.listContent}
+          data={filteredItems}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          ListEmptyComponent={isLoading ? renderLoadingState : renderEmptyState}
+          contentContainerStyle={[
+            styles.listContent,
+            filteredItems.length === 0 && { flex: 1 },
+          ]}
           showsVerticalScrollIndicator={false}
         />
       </View>
@@ -211,14 +326,8 @@ export default function CariBarangScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
 
   // ===== HEADER =====
   headerContainer: {
@@ -296,11 +405,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -325,11 +430,7 @@ const styles = StyleSheet.create({
   },
 
   // ===== SEARCH BAR =====
-  searchWrapper: {
-    paddingHorizontal: 16,
-    marginTop: -10,
-    zIndex: 2,
-  },
+  searchWrapper: { paddingHorizontal: 16, marginTop: -10, zIndex: 2 },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -361,14 +462,8 @@ const styles = StyleSheet.create({
   },
 
   // ===== KATEGORI =====
-  categoriesWrapper: {
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  categoriesContainer: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
+  categoriesWrapper: { marginTop: 16, marginBottom: 8 },
+  categoriesContainer: { paddingHorizontal: 16, gap: 8 },
   categoryPill: {
     paddingHorizontal: 18,
     paddingVertical: 8,
@@ -378,25 +473,68 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#E8E8E8",
   },
-  categoryPillActive: {
-    backgroundColor: "#2D7D46",
-    borderColor: "#2D7D46",
-  },
-  categoryText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#888888",
-  },
-  categoryTextActive: {
-    color: "#FFFFFF",
-  },
+  categoryPillActive: { backgroundColor: "#2D7D46", borderColor: "#2D7D46" },
+  categoryText: { fontSize: 13, fontWeight: "500", color: "#888888" },
+  categoryTextActive: { color: "#FFFFFF" },
 
   // ===== LIST =====
-  listContent: {
-    flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingBottom: 40,
+  listContent: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 40 },
+
+  // ===== ITEM CARD =====
+  itemCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
+  itemHeader: { flexDirection: "row", alignItems: "center" },
+  itemIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: "#F5F9F7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    overflow: "hidden",
+  },
+  itemInfo: { flex: 1, paddingRight: 8 },
+  itemName: { fontSize: 15, fontWeight: "600", color: "#1A1A1A" },
+  itemDetail: { fontSize: 12, color: "#888888", marginTop: 2 },
+  itemDesc: {
+    fontSize: 11,
+    color: "#B0B0B0",
+    marginTop: 2,
+    fontStyle: "italic",
+  },
+  itemStatus: {
+    backgroundColor: "#E8F5EA",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  itemStatusText: {
+    fontSize: 10,
+    color: "#2D7D46",
+    fontWeight: "500",
+    textTransform: "capitalize",
+  },
+  itemFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+  },
+  itemDate: { fontSize: 11, color: "#B0B0B0" },
+  itemHarga: { fontSize: 12, fontWeight: "600", color: "#2D7D46" },
 
   // ===== EMPTY STATE =====
   emptyContainer: {
@@ -420,6 +558,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#1A1A1A",
     marginBottom: 8,
+    textAlign: "center",
   },
   emptySubtitle: {
     fontSize: 14,
@@ -442,9 +581,5 @@ const styles = StyleSheet.create({
     elevation: 5,
     gap: 8,
   },
-  emptyButtonText: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
+  emptyButtonText: { fontSize: 15, fontWeight: "bold", color: "#FFFFFF" },
 });

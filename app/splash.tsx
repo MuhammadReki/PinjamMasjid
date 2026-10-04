@@ -3,16 +3,17 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    Image,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Dimensions,
+  Image,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import { supabase } from "../utils/supabase";
 
-// 🔥 LOGO DARI IMGBB (URL LANGSUNG)
+// 🔥 LOGO DARI IMGBB
 const LOGO_URL = "https://i.ibb.co.com/gZhskXq5/Logo-Pinjam-Masjid.png";
 
 const { width, height } = Dimensions.get("window");
@@ -34,7 +35,6 @@ export default function SplashScreen() {
 
   // ===== ANIMASI LOGO =====
   useEffect(() => {
-    // Logo muncul dengan fade + scale
     Animated.parallel([
       Animated.timing(logoFade, {
         toValue: 1,
@@ -49,7 +49,6 @@ export default function SplashScreen() {
       }),
     ]).start();
 
-    // Glow effect
     setTimeout(() => {
       Animated.parallel([
         Animated.sequence([
@@ -78,7 +77,6 @@ export default function SplashScreen() {
       ]).start();
     }, 200);
 
-    // Shine effect
     setTimeout(() => {
       Animated.sequence([
         Animated.timing(shineOpacity, {
@@ -94,7 +92,6 @@ export default function SplashScreen() {
       ]).start();
     }, 600);
 
-    // Title muncul dari bawah
     setTimeout(() => {
       Animated.parallel([
         Animated.timing(titleFade, {
@@ -111,7 +108,6 @@ export default function SplashScreen() {
       ]).start();
     }, 600);
 
-    // Subtitle muncul
     setTimeout(() => {
       Animated.parallel([
         Animated.timing(subtitleFade, {
@@ -133,17 +129,47 @@ export default function SplashScreen() {
     }, 3800);
   }, []);
 
-  // ===== PINDAH KE HALAMAN BERIKUTNYA =====
+  // ===== CEK SESI & REDIRECT =====
   useEffect(() => {
-    if (isReady) {
-      Animated.timing(logoFade, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }).start(() => {
-        router.replace("/");
-      });
-    }
+    if (!isReady) return;
+
+    const checkSessionAndRedirect = async () => {
+      try {
+        // Cek apakah user udah login
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        console.log("Splash - Session:", session ? "ACTIVE" : "NONE");
+
+        // Fade out logo
+        Animated.timing(logoFade, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }).start(() => {
+          if (session) {
+            // Kalau udah login → Dashboard
+            router.replace("/dashboard");
+          } else {
+            // Kalau belum → Login page
+            router.replace("/");
+          }
+        });
+      } catch (error) {
+        console.error("Error checking session:", error);
+        // Fallback ke login
+        Animated.timing(logoFade, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }).start(() => {
+          router.replace("/");
+        });
+      }
+    };
+
+    checkSessionAndRedirect();
   }, [isReady]);
 
   return (
@@ -270,12 +296,8 @@ export default function SplashScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
   content: {
     flex: 1,
     justifyContent: "center",
@@ -483,10 +505,7 @@ const styles = StyleSheet.create({
     elevation: 15,
     overflow: "hidden",
   },
-  logoImage: {
-    width: 140,
-    height: 140,
-  },
+  logoImage: { width: 140, height: 140 },
   logoFallback: {
     position: "absolute",
     width: 170,
@@ -496,14 +515,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  logoFallbackText: {
-    fontSize: 68,
-  },
+  logoFallbackText: { fontSize: 68 },
 
   // ===== TITLE =====
-  titleContainer: {
-    marginBottom: 4,
-  },
+  titleContainer: { marginBottom: 4 },
   title: {
     fontSize: 34,
     fontWeight: "bold",
@@ -515,9 +530,7 @@ const styles = StyleSheet.create({
   },
 
   // ===== SUBTITLE =====
-  subtitleContainer: {
-    marginBottom: 30,
-  },
+  subtitleContainer: { marginBottom: 30 },
   subtitle: {
     fontSize: 14,
     color: "rgba(255,255,255,0.7)",
@@ -529,32 +542,19 @@ const styles = StyleSheet.create({
   },
 
   // ===== LOADING =====
-  loadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
+  loadingContainer: { flexDirection: "row", alignItems: "center", gap: 12 },
   loadingDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: "#C9A84C",
   },
-  loadingDot1: {
-    opacity: 0.3,
-  },
-  loadingDot2: {
-    opacity: 0.6,
-  },
-  loadingDot3: {
-    opacity: 1,
-  },
+  loadingDot1: { opacity: 0.3 },
+  loadingDot2: { opacity: 0.6 },
+  loadingDot3: { opacity: 1 },
 
   // ===== FOOTER =====
-  footer: {
-    paddingBottom: 30,
-    alignItems: "center",
-  },
+  footer: { paddingBottom: 30, alignItems: "center" },
   footerText: {
     fontSize: 12,
     color: "rgba(255,255,255,0.35)",

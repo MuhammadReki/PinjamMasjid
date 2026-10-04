@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getItems } from "../utils/storage";
 
 export default function InventarisScreen() {
   const insets = useSafeAreaInsets();
@@ -23,6 +26,7 @@ export default function InventarisScreen() {
   const [selectedCategory, setSelectedCategory] = useState("Semua");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [inventory, setInventory] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // ===== ANIMASI =====
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -45,6 +49,26 @@ export default function InventarisScreen() {
       }),
     ]).start();
   }, []);
+
+  // ===== LOAD DATA DARI SUPABASE =====
+  const loadInventory = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await getItems();
+      console.log("Data inventory:", data);
+      setInventory(data || []);
+    } catch (error) {
+      console.error("Error loading inventory:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadInventory();
+    }, [loadInventory]),
+  );
 
   // ===== KATEGORI =====
   const categories = [
@@ -89,6 +113,14 @@ export default function InventarisScreen() {
     }).start();
   };
 
+  // ===== RENDER LOADING STATE =====
+  const renderLoadingState = () => (
+    <View style={styles.emptyContainer}>
+      <ActivityIndicator size="large" color="#2D7D46" />
+      <Text style={styles.emptySubtitle}>Memuat data...</Text>
+    </View>
+  );
+
   // ===== RENDER EMPTY STATE =====
   const renderEmptyState = () => (
     <Animated.View
@@ -127,19 +159,34 @@ export default function InventarisScreen() {
     <TouchableOpacity style={styles.itemCard} activeOpacity={0.8}>
       <View style={styles.itemHeader}>
         <View style={styles.itemIconContainer}>
-          <Ionicons name="cube-outline" size={24} color="#2D7D46" />
+          {item.foto_url ? (
+            <Image
+              source={{ uri: item.foto_url }}
+              style={{ width: 44, height: 44, borderRadius: 12 }}
+            />
+          ) : (
+            <Ionicons name="cube-outline" size={24} color="#2D7D46" />
+          )}
         </View>
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{item.nama || "Barang"}</Text>
           <Text style={styles.itemDetail}>Jumlah: {item.jumlah || 0} buah</Text>
         </View>
         <View style={styles.itemStatus}>
-          <Text style={styles.itemStatusText}>Tersedia</Text>
+          <Text style={styles.itemStatusText}>
+            {item.kondisi || "Tersedia"}
+          </Text>
         </View>
       </View>
       <View style={styles.itemFooter}>
-        <Text style={styles.itemOwner}>👤 Pemilik</Text>
-        <Text style={styles.itemDate}>Belum ada data</Text>
+        <Text style={styles.itemOwner} numberOfLines={1}>
+          📝 {item.deskripsi || "Tidak ada deskripsi"}
+        </Text>
+        <Text style={styles.itemDate}>
+          {item.created_at
+            ? new Date(item.created_at).toLocaleDateString("id-ID")
+            : "-"}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -242,7 +289,7 @@ export default function InventarisScreen() {
               <Ionicons name="cube-outline" size={20} color="#2D7D46" />
             </View>
             <Text style={styles.summaryLabel}>Total Barang</Text>
-            <Text style={styles.summaryValue}>Menunggu data</Text>
+            <Text style={styles.summaryValue}>{inventory.length}</Text>
           </View>
           <View style={styles.summaryCard}>
             <View style={[styles.summaryIcon, { backgroundColor: "#E8F5EA" }]}>
@@ -253,7 +300,9 @@ export default function InventarisScreen() {
               />
             </View>
             <Text style={styles.summaryLabel}>Barang Tersedia</Text>
-            <Text style={styles.summaryValue}>Menunggu data</Text>
+            <Text style={styles.summaryValue}>
+              {inventory.filter((i) => i.kondisi === "baik").length}
+            </Text>
           </View>
           <View style={styles.summaryCard}>
             <View style={[styles.summaryIcon, { backgroundColor: "#FFF8E1" }]}>
@@ -264,16 +313,16 @@ export default function InventarisScreen() {
               />
             </View>
             <Text style={styles.summaryLabel}>Peminjaman</Text>
-            <Text style={styles.summaryValue}>Menunggu data</Text>
+            <Text style={styles.summaryValue}>0</Text>
           </View>
         </View>
 
         {/* ===== DAFTAR INVENTARIS ===== */}
         <FlatList
           data={inventory}
-          keyExtractor={(item, index) => index.toString()}
+          keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          ListEmptyComponent={renderEmptyState}
+          ListEmptyComponent={isLoading ? renderLoadingState : renderEmptyState}
           contentContainerStyle={[
             styles.listContent,
             inventory.length === 0 && { flex: 1 },
@@ -577,8 +626,8 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   summaryValue: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     color: "#1A1A1A",
     marginTop: 2,
   },
@@ -613,6 +662,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+    overflow: "hidden",
   },
   itemInfo: {
     flex: 1,
@@ -637,21 +687,25 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#2D7D46",
     fontWeight: "500",
+    textTransform: "capitalize",
   },
   itemFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#F0F0F0",
+    gap: 8,
   },
   itemOwner: {
+    flex: 1,
     fontSize: 12,
     color: "#888888",
   },
   itemDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#B0B0B0",
   },
 
