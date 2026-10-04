@@ -16,10 +16,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// ===== 🔥 IMPORT FIREBASE =====
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../config/firebase";
+// ===== 🔥 IMPORT SUPABASE =====
+import { supabase } from "../utils/supabase";
 
 export default function DaftarAkunScreen() {
   const [nama, setNama] = useState("");
@@ -55,9 +53,16 @@ export default function DaftarAkunScreen() {
     ]).start();
   }, []);
 
-  // ===== 🔥 FUNGSI DAFTAR (FIREBASE) =====
+  // ===== 🔥 FUNGSI DAFTAR (SUPABASE) =====
   const handleDaftar = async () => {
-    if (!nama || !email || !nomorHP || !jabatan || !password || !konfirmasiPassword) {
+    if (
+      !nama ||
+      !email ||
+      !nomorHP ||
+      !jabatan ||
+      !password ||
+      !konfirmasiPassword
+    ) {
       Alert.alert("Peringatan", "Semua field harus diisi!");
       return;
     }
@@ -75,32 +80,44 @@ export default function DaftarAkunScreen() {
     setIsLoading(true);
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      await setDoc(doc(db, "users", user.uid), {
-        name: nama,
-        email: email,
-        phone: nomorHP,
-        role: jabatan,
-        createdAt: new Date().toISOString(),
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: nama,
+            phone: nomorHP,
+            role: jabatan,
+          },
+        },
       });
+
+      if (error) {
+        let pesanError = "Terjadi kesalahan. Silakan coba lagi.";
+        const msg = error.message.toLowerCase();
+
+        if (
+          msg.includes("already registered") ||
+          msg.includes("already exists")
+        ) {
+          pesanError = "Email sudah terdaftar! Gunakan email lain.";
+        } else if (msg.includes("password")) {
+          pesanError = "Password terlalu lemah! Minimal 6 karakter.";
+        } else if (msg.includes("invalid")) {
+          pesanError = "Format email tidak valid!";
+        }
+
+        Alert.alert("Pendaftaran Gagal", pesanError);
+        return;
+      }
 
       Alert.alert(
         "Pendaftaran Berhasil! 🎉",
-        "Akun Anda telah terdaftar. Silakan login untuk melanjutkan.",
-        [{ text: "OK", onPress: () => router.back() }]
+        "Akun Anda telah terdaftar. Silakan cek email untuk konfirmasi, lalu login.",
+        [{ text: "OK", onPress: () => router.back() }],
       );
     } catch (error: any) {
-      let pesanError = "Terjadi kesalahan. Silakan coba lagi.";
-      if (error.code === "auth/email-already-in-use") {
-        pesanError = "Email sudah terdaftar! Gunakan email lain.";
-      } else if (error.code === "auth/weak-password") {
-        pesanError = "Password terlalu lemah! Minimal 6 karakter.";
-      } else if (error.code === "auth/invalid-email") {
-        pesanError = "Format email tidak valid!";
-      }
-      Alert.alert("Pendaftaran Gagal", pesanError);
+      Alert.alert("Pendaftaran Gagal", error.message || "Terjadi kesalahan");
     } finally {
       setIsLoading(false);
     }
@@ -204,10 +221,7 @@ export default function DaftarAkunScreen() {
           <Animated.View
             style={[
               styles.formCard,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
             ]}
           >
             {inputFields.map((field) => (
@@ -231,7 +245,9 @@ export default function DaftarAkunScreen() {
                     value={field.value}
                     onChangeText={field.onChange}
                     keyboardType={field.keyboard as any}
-                    autoCapitalize={(field.autoCapitalize as any) || "sentences"}
+                    autoCapitalize={
+                      (field.autoCapitalize as any) || "sentences"
+                    }
                     onFocus={() => setFocusedField(field.id)}
                     onBlur={() => setFocusedField(null)}
                     textAlignVertical="center"
@@ -357,7 +373,6 @@ export default function DaftarAkunScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            {/* ===== SUDAH PUNYA AKUN ===== */}
             <View style={styles.registerContainer}>
               <Text style={styles.registerText}>Sudah punya akun?</Text>
               <TouchableOpacity onPress={() => router.back()}>
@@ -372,21 +387,10 @@ export default function DaftarAkunScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
   headerContainer: {
     backgroundColor: "#2D7D46",
     paddingHorizontal: 20,
@@ -459,10 +463,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     zIndex: 2,
   },
-  headerContent: {
-    alignItems: "center",
-    zIndex: 1,
-  },
+  headerContent: { alignItems: "center", zIndex: 1 },
   headerTitle: {
     fontSize: 16,
     fontWeight: "bold",
@@ -491,15 +492,8 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 4,
   },
-  inputWrapper: {
-    marginBottom: 12,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 4,
-  },
+  inputWrapper: { marginBottom: 12 },
+  label: { fontSize: 12, fontWeight: "600", color: "#333", marginBottom: 4 },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -538,12 +532,7 @@ const styles = StyleSheet.create({
     borderLeftColor: "#C9A84C",
     gap: 6,
   },
-  infoText: {
-    flex: 1,
-    fontSize: 11,
-    color: "#666",
-    lineHeight: 16,
-  },
+  infoText: { flex: 1, fontSize: 11, color: "#666", lineHeight: 16 },
   primaryButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -564,19 +553,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.3,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
+  buttonDisabled: { opacity: 0.6 },
   dividerContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginVertical: 12,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E8E8E8",
-  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#E8E8E8" },
   dividerText: {
     paddingHorizontal: 10,
     fontSize: 11,
@@ -588,13 +571,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  registerText: {
-    fontSize: 12,
-    color: "#666",
-  },
-  registerLink: {
-    fontSize: 12,
-    color: "#2D7D46",
-    fontWeight: "600",
-  },
+  registerText: { fontSize: 12, color: "#666" },
+  registerLink: { fontSize: 12, color: "#2D7D46", fontWeight: "600" },
 });

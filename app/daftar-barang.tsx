@@ -20,7 +20,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { auth } from "../config/firebase"; // 🔥 TAMBAHKAN INI
+
+// ===== 🔥 IMPORT SUPABASE =====
 import { supabase } from "../utils/supabase";
 
 export default function DaftarBarangScreen() {
@@ -77,7 +78,7 @@ export default function DaftarBarangScreen() {
     if (status !== "granted") {
       Alert.alert(
         "Izin Diperlukan",
-        "Izin kamera diperlukan untuk mengambil foto barang"
+        "Izin kamera diperlukan untuk mengambil foto barang",
       );
       return;
     }
@@ -103,24 +104,18 @@ export default function DaftarBarangScreen() {
   const formatRupiah = (text: string) => {
     const clean = text.replace(/[^0-9]/g, "");
     if (!clean) return "";
-    const formatted = new Intl.NumberFormat("id-ID").format(parseInt(clean));
-    return formatted;
+    return new Intl.NumberFormat("id-ID").format(parseInt(clean));
   };
 
   // ===== COUNTER =====
   const handleJumlah = (type: "tambah" | "kurang") => {
-    if (type === "tambah") {
-      setJumlah(jumlah + 1);
-    } else {
-      if (jumlah > 1) {
-        setJumlah(jumlah - 1);
-      }
-    }
+    if (type === "tambah") setJumlah(jumlah + 1);
+    else if (jumlah > 1) setJumlah(jumlah - 1);
   };
 
-  // ===== 🔥 HANDLER DAFTAR (VERSI SUPABASE + FIREBASE AUTH) =====
+  // ===== 🔥 HANDLER DAFTAR (SUPABASE) =====
   const handleDaftar = async () => {
-    // ===== VALIDASI =====
+    // Validasi
     if (!foto) {
       Alert.alert("Validasi", "Foto barang wajib diambil!");
       return;
@@ -138,9 +133,12 @@ export default function DaftarBarangScreen() {
       return;
     }
 
-    // 🔥 CEK USER DARI FIREBASE AUTH (BUKAN SUPABASE)
-    const user = auth.currentUser;
-    if (!user) {
+    // 🔥 CEK USER DARI SUPABASE AUTH
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
       Alert.alert("Error", "Anda harus login terlebih dahulu!");
       return;
     }
@@ -159,11 +157,10 @@ export default function DaftarBarangScreen() {
 
       if (uploadError) throw uploadError;
 
-      // Dapatkan URL publik dari foto
+      // Dapatkan URL publik
       const { data: urlData } = supabase.storage
         .from("barang")
         .getPublicUrl(fileName);
-
       const fotoUrl = urlData.publicUrl;
 
       // ===== 2. SIMPAN DATA KE TABEL "barang" =====
@@ -177,7 +174,7 @@ export default function DaftarBarangScreen() {
           harga: parseInt(hargaBersih) || 0,
           kondisi: kondisi,
           foto_url: fotoUrl,
-          created_by: user.uid, // 🔥 PAKE UID DARI FIREBASE
+          created_by: user.id, // 🔥 PAKE UID DARI SUPABASE
         })
         .select();
 
@@ -187,18 +184,13 @@ export default function DaftarBarangScreen() {
       }
 
       console.log("Data berhasil disimpan:", insertData);
-
-      // ===== 3. TAMPILKAN MODAL SUKSES =====
       setShowSuccess(true);
     } catch (error: any) {
       console.error("Error detail:", error);
-
-      let pesanError = "Terjadi kesalahan. Silakan coba lagi.";
-      if (error.message) {
-        pesanError = error.message;
-      }
-
-      Alert.alert("Gagal", pesanError);
+      Alert.alert(
+        "Gagal",
+        error.message || "Terjadi kesalahan. Silakan coba lagi.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -212,7 +204,6 @@ export default function DaftarBarangScreen() {
       speed: 50,
     }).start();
   };
-
   const handlePressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
@@ -257,7 +248,7 @@ export default function DaftarBarangScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        {/* ===== HEADER ===== */}
+        {/* HEADER */}
         <View style={[styles.headerContainer, { paddingTop: insets.top + 10 }]}>
           <View style={styles.patternContainer}>
             <View style={styles.pattern1} />
@@ -283,7 +274,7 @@ export default function DaftarBarangScreen() {
           </View>
         </View>
 
-        {/* ===== FORM ===== */}
+        {/* FORM */}
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
@@ -292,13 +283,10 @@ export default function DaftarBarangScreen() {
           <Animated.View
             style={[
               styles.formContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
             ]}
           >
-            {/* ===== UPLOAD FOTO ===== */}
+            {/* UPLOAD FOTO */}
             <View style={styles.inputWrapper}>
               <Text style={styles.label}>Foto Barang</Text>
               <TouchableOpacity
@@ -353,7 +341,7 @@ export default function DaftarBarangScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* ===== NAMA BARANG ===== */}
+            {/* NAMA BARANG */}
             <View style={styles.inputWrapper}>
               <Text style={styles.label}>Nama Barang</Text>
               <View style={styles.inputContainer}>
@@ -368,7 +356,7 @@ export default function DaftarBarangScreen() {
               </View>
             </View>
 
-            {/* ===== JUMLAH ===== */}
+            {/* JUMLAH */}
             <View style={styles.inputWrapper}>
               <Text style={styles.label}>Jumlah</Text>
               <View style={styles.counterContainer}>
@@ -398,7 +386,7 @@ export default function DaftarBarangScreen() {
               </View>
             </View>
 
-            {/* ===== DESKRIPSI ===== */}
+            {/* DESKRIPSI */}
             <View style={styles.inputWrapper}>
               <Text style={styles.label}>Deskripsi</Text>
               <TextInput
@@ -413,7 +401,7 @@ export default function DaftarBarangScreen() {
               />
             </View>
 
-            {/* ===== HARGA PERKIRAAN ===== */}
+            {/* HARGA */}
             <View style={styles.inputWrapper}>
               <Text style={styles.label}>Harga Perkiraan (Rp)</Text>
               <View style={styles.inputContainer}>
@@ -433,7 +421,7 @@ export default function DaftarBarangScreen() {
               </View>
             </View>
 
-            {/* ===== KONDISI ===== */}
+            {/* KONDISI */}
             <View style={styles.inputWrapper}>
               <Text style={styles.label}>Kondisi</Text>
               <View style={styles.kondisiContainer}>
@@ -501,7 +489,7 @@ export default function DaftarBarangScreen() {
               </View>
             </View>
 
-            {/* ===== TOMBOL AKSI ===== */}
+            {/* TOMBOL */}
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -538,7 +526,7 @@ export default function DaftarBarangScreen() {
           </Animated.View>
         </ScrollView>
 
-        {/* ===== MODAL SUKSES ===== */}
+        {/* MODAL SUKSES */}
         <Modal
           visible={showSuccess}
           transparent
@@ -549,9 +537,7 @@ export default function DaftarBarangScreen() {
             <Animated.View
               style={[
                 styles.modalContent,
-                {
-                  transform: [{ scale: modalScaleAnim }],
-                },
+                { transform: [{ scale: modalScaleAnim }] },
               ]}
             >
               <View style={styles.successIconContainer}>
@@ -584,24 +570,10 @@ export default function DaftarBarangScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
-  },
-
-  // ===== HEADER =====
+  safeArea: { flex: 1, backgroundColor: "#F5F0E8" },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40 },
   headerContainer: {
     backgroundColor: "#2D7D46",
     paddingHorizontal: 20,
@@ -677,11 +649,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTextContainer: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
+  headerTextContainer: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
@@ -696,11 +664,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 16,
   },
-  headerPlaceholder: {
-    width: 40,
-  },
-
-  // ===== FORM =====
+  headerPlaceholder: { width: 40 },
   formContainer: {
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
@@ -711,17 +675,8 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 6,
   },
-  inputWrapper: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
-  },
-
-  // ===== UPLOAD FOTO =====
+  inputWrapper: { marginBottom: 20 },
+  label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 8 },
   uploadContainer: {
     width: "100%",
     height: 200,
@@ -734,10 +689,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  uploadPlaceholder: {
-    alignItems: "center",
-    padding: 20,
-  },
+  uploadPlaceholder: { alignItems: "center", padding: 20 },
   uploadIconContainer: {
     width: 80,
     height: 80,
@@ -747,26 +699,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  uploadTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#2D7D46",
-  },
-  uploadSubtitle: {
-    fontSize: 13,
-    color: "#8A8A8A",
-    marginTop: 4,
-  },
-  previewContainer: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-  },
-  previewImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
+  uploadTitle: { fontSize: 16, fontWeight: "600", color: "#2D7D46" },
+  uploadSubtitle: { fontSize: 13, color: "#8A8A8A", marginTop: 4 },
+  previewContainer: { width: "100%", height: "100%", position: "relative" },
+  previewImage: { width: "100%", height: "100%", resizeMode: "cover" },
   previewOverlay: {
     position: "absolute",
     bottom: 0,
@@ -793,13 +729,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.3)",
   },
-  previewButtonText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "500",
-  },
-
-  // ===== INPUT =====
+  previewButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "500" },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -810,19 +740,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
     height: 52,
   },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#1A1A1A",
-    paddingLeft: 10,
-  },
-  textArea: {
-    height: 110,
-    paddingTop: 14,
-    textAlignVertical: "top",
-  },
-
-  // ===== COUNTER =====
+  input: { flex: 1, fontSize: 16, color: "#1A1A1A", paddingLeft: 10 },
+  textArea: { height: 110, paddingTop: 14, textAlignVertical: "top" },
   counterContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -842,9 +761,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  counterButtonDisabled: {
-    backgroundColor: "#F0F0F0",
-  },
+  counterButtonDisabled: { backgroundColor: "#F0F0F0" },
   counterValue: {
     fontSize: 22,
     fontWeight: "bold",
@@ -853,11 +770,7 @@ const styles = StyleSheet.create({
     minWidth: 44,
     textAlign: "center",
   },
-
-  // ===== KONDISI =====
-  kondisiContainer: {
-    marginTop: 4,
-  },
+  kondisiContainer: { marginTop: 4 },
   kondisiCard: {
     borderWidth: 2,
     borderColor: "#E8E8E8",
@@ -866,14 +779,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: "#FAFAFA",
   },
-  kondisiCardActive: {
-    borderWidth: 2.5,
-    backgroundColor: "#FFFFFF",
-  },
-  kondisiRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  kondisiCardActive: { borderWidth: 2.5, backgroundColor: "#FFFFFF" },
+  kondisiRow: { flexDirection: "row", alignItems: "center" },
   kondisiIconContainer: {
     width: 40,
     height: 40,
@@ -882,19 +789,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 14,
   },
-  kondisiTextContainer: {
-    flex: 1,
-  },
-  kondisiLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-  kondisiDesc: {
-    fontSize: 12,
-    color: "#8A8A8A",
-    marginTop: 1,
-  },
+  kondisiTextContainer: { flex: 1 },
+  kondisiLabel: { fontSize: 15, fontWeight: "600", color: "#333" },
+  kondisiDesc: { fontSize: 12, color: "#8A8A8A", marginTop: 1 },
   kondisiCheck: {
     width: 24,
     height: 24,
@@ -902,8 +799,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
-  // ===== TOMBOL =====
   buttonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -950,8 +845,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     marginLeft: 6,
   },
-
-  // ===== MODAL SUKSES =====
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -966,10 +859,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     maxWidth: 360,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 28,
     elevation: 12,
   },
   successIconContainer: {
@@ -1003,9 +892,5 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
   },
-  successButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  successButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
 });

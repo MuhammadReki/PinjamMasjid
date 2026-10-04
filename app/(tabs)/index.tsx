@@ -13,9 +13,8 @@ import {
   View,
 } from "react-native";
 
-// ===== 🔥 IMPORT FIREBASE =====
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../config/firebase";
+// ===== 🔥 IMPORT SUPABASE =====
+import { supabase } from "../../utils/supabase";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -23,7 +22,7 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ===== 🔥 FUNGSI LOGIN EMAIL/PASSWORD =====
+  // ===== 🔥 FUNGSI LOGIN SUPABASE =====
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Peringatan", "Email dan password harus diisi!");
@@ -33,21 +32,33 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        let pesanError = "Terjadi kesalahan. Silakan coba lagi.";
+        const msg = error.message.toLowerCase();
+
+        if (msg.includes("invalid login credentials")) {
+          pesanError = "Email atau password salah!";
+        } else if (msg.includes("email not confirmed")) {
+          pesanError = "Email belum dikonfirmasi. Cek inbox email Anda.";
+        } else if (msg.includes("invalid email")) {
+          pesanError = "Format email tidak valid!";
+        } else if (msg.includes("too many requests")) {
+          pesanError = "Terlalu banyak percobaan. Coba lagi nanti.";
+        }
+
+        Alert.alert("Login Gagal", pesanError);
+        return;
+      }
+
       Alert.alert("Sukses", "Login berhasil!");
       router.replace("/dashboard");
     } catch (error: any) {
-      let pesanError = "Terjadi kesalahan. Silakan coba lagi.";
-      if (error.code === "auth/user-not-found") {
-        pesanError = "Email tidak terdaftar! Silakan daftar akun baru.";
-      } else if (error.code === "auth/wrong-password") {
-        pesanError = "Password salah! Silakan coba lagi.";
-      } else if (error.code === "auth/invalid-email") {
-        pesanError = "Format email tidak valid!";
-      } else if (error.code === "auth/too-many-requests") {
-        pesanError = "Terlalu banyak percobaan. Coba lagi nanti.";
-      }
-      Alert.alert("Login Gagal", pesanError);
+      Alert.alert("Login Gagal", error.message || "Terjadi kesalahan");
     } finally {
       setIsLoading(false);
     }
@@ -140,37 +151,17 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F0E8",
-  },
+  container: { flex: 1, backgroundColor: "#F5F0E8" },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
     paddingVertical: 40,
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  title: {
-    fontSize: 40,
-    fontWeight: "bold",
-    color: "#2D7D46",
-  },
-  subtitle: {
-    fontSize: 18,
-    color: "#C9A84C",
-    marginTop: 4,
-    fontWeight: "500",
-  },
-  subtitle2: {
-    fontSize: 14,
-    color: "#777",
-    marginTop: 2,
-    fontStyle: "italic",
-  },
+  header: { alignItems: "center", marginBottom: 40 },
+  title: { fontSize: 40, fontWeight: "bold", color: "#2D7D46" },
+  subtitle: { fontSize: 18, color: "#C9A84C", marginTop: 4, fontWeight: "500" },
+  subtitle2: { fontSize: 14, color: "#777", marginTop: 2, fontStyle: "italic" },
   formContainer: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
@@ -181,15 +172,8 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
-  inputContainer: {
-    marginBottom: 18,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 6,
-  },
+  inputContainer: { marginBottom: 18 },
+  label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 6 },
   input: {
     borderWidth: 1,
     borderColor: "#DDD",
@@ -205,10 +189,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24,
   },
-  rememberContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  rememberContainer: { flexDirection: "row", alignItems: "center" },
   checkbox: {
     width: 20,
     height: 20,
@@ -217,18 +198,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginRight: 8,
   },
-  checkboxActive: {
-    backgroundColor: "#2D7D46",
-  },
-  rememberText: {
-    fontSize: 14,
-    color: "#555",
-  },
-  forgotText: {
-    fontSize: 14,
-    color: "#C9A84C",
-    fontWeight: "500",
-  },
+  checkboxActive: { backgroundColor: "#2D7D46" },
+  rememberText: { fontSize: 14, color: "#555" },
+  forgotText: { fontSize: 14, color: "#C9A84C", fontWeight: "500" },
   loginButton: {
     backgroundColor: "#2D7D46",
     paddingVertical: 16,
@@ -236,30 +208,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  loginButtonText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  registerContainer: {
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  registerText: {
-    fontSize: 14,
-    color: "#555",
-    textAlign: "center",
-  },
-  registerButton: {
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  registerLink: {
-    fontSize: 14,
-    color: "#2D7D46",
-    fontWeight: "bold",
-  },
+  loginButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "bold" },
+  buttonDisabled: { opacity: 0.6 },
+  registerContainer: { alignItems: "center", marginBottom: 4 },
+  registerText: { fontSize: 14, color: "#555", textAlign: "center" },
+  registerButton: { alignItems: "center", paddingVertical: 8 },
+  registerLink: { fontSize: 14, color: "#2D7D46", fontWeight: "bold" },
 });
