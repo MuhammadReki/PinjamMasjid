@@ -140,6 +140,24 @@ Aplikasi ini memiliki **3 level pengguna** dengan hak akses berbeda:
 
 ---
 
+## 📱 Download APK
+
+<div align="center">
+
+### Versi Terbaru: v1.0.0
+
+[![Download APK](https://img.shields.io/badge/Download-APK-2D7D46?style=for-the-badge&logo=android&logoColor=white)](https://github.com/MuhammadReki/PinjamMasjid/releases/latest)
+
+### 📲 Scan QR Code untuk Download
+
+<img src="./screenshots/PinjamMasjid-Barcode.jpg" alt="QR Code Download PinjamMasjid" width="250" />
+
+**Scan pake kamera HP → download APK → install → selesai!**
+
+</div>
+
+---
+
 ## 🚀 Cara Pakai
 
 ### Untuk Pengguna
