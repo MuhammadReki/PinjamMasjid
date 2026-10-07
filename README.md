@@ -14,7 +14,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![OneSignal](https://img.shields.io/badge/OneSignal-E54B4D?style=for-the-badge&logo=onesignal&logoColor=white)](https://onesignal.com/)
 
-[📱 Download APK](#-download-apk) • [✨ Fitur](#-fitur-utama) • [🚀 Cara Pakai](#-cara-pakai) • [🛠️ Tech Stack](#️-tech-stack)
+[📱 Download APK](#-download-apk) • [✨ Fitur](#-fitur-utama) • [📸 Screenshot](#-screenshot-aplikasi) • [🛠️ Tech Stack](#️-tech-stack)
 
 </div>
 
@@ -94,6 +94,38 @@ Aplikasi ini memiliki **3 level pengguna** dengan hak akses berbeda:
 | 👤 **Multi-Role Auth**    | Login dengan role-based access control                                |
 | 🔐 **Keamanan**           | Password terenkripsi, session management, RLS Supabase                |
 | 📱 **UI Modern**          | Design clean & intuitif dengan bottom nav dinamis per role            |
+
+---
+
+## 📸 Screenshot Aplikasi
+
+<div align="center">
+
+### 🔐 Login
+
+|               Login               |                    Dashboard Jemaah                     |
+| :-------------------------------: | :-----------------------------------------------------: |
+| ![Login](./screenshots/login.jpg) | ![Dashboard Jemaah](./screenshots/dashboard-jemaah.jpg) |
+
+### 👥 Dashboard Multi-Role
+
+|                          Panitia                          |                           Superadmin                            |
+| :-------------------------------------------------------: | :-------------------------------------------------------------: |
+| ![Dashboard Panitia](./screenshots/dashboard-panitia.jpg) | ![Dashboard Superadmin](./screenshots/dashboard-superadmin.jpg) |
+
+### 📦 Fitur Utama
+
+|            Barang Masjid            |              Pinjaman Saya              |          Approve Peminjaman           |
+| :---------------------------------: | :-------------------------------------: | :-----------------------------------: |
+| ![Barang](./screenshots/barang.jpg) | ![Pinjaman](./screenshots/pinjaman.jpg) | ![Approve](./screenshots/approve.jpg) |
+
+### 🔔 Notifikasi
+
+|                 Notifikasi                  |
+| :-----------------------------------------: |
+| ![Notifikasi](./screenshots/notifikasi.jpg) |
+
+</div>
 
 ---
 
