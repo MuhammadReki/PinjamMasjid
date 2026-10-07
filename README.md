@@ -105,25 +105,25 @@ Aplikasi ini memiliki **3 level pengguna** dengan hak akses berbeda:
 
 |               Login               |                    Dashboard Jemaah                     |
 | :-------------------------------: | :-----------------------------------------------------: |
-| ![Login](./screenshots/login.jpg) | ![Dashboard Jemaah](./screenshots/dashboard-jemaah.jpg) |
+| ![Login](./screenshots/login.png) | ![Dashboard Jemaah](./screenshots/dashboard-jemaah.png) |
 
 ### 👥 Dashboard Multi-Role
 
 |                          Panitia                          |                           Superadmin                            |
 | :-------------------------------------------------------: | :-------------------------------------------------------------: |
-| ![Dashboard Panitia](./screenshots/dashboard-panitia.jpg) | ![Dashboard Superadmin](./screenshots/dashboard-superadmin.jpg) |
+| ![Dashboard Panitia](./screenshots/dashboard-panitia.png) | ![Dashboard Superadmin](./screenshots/dashboard-superadmin.png) |
 
 ### 📦 Fitur Utama
 
 |            Barang Masjid            |              Pinjaman Saya              |          Approve Peminjaman           |
 | :---------------------------------: | :-------------------------------------: | :-----------------------------------: |
-| ![Barang](./screenshots/barang.jpg) | ![Pinjaman](./screenshots/pinjaman.jpg) | ![Approve](./screenshots/approve.jpg) |
+| ![Barang](./screenshots/barang.png) | ![Pinjaman](./screenshots/pinjaman.png) | ![Approve](./screenshots/approve.png) |
 
 ### 🔔 Notifikasi
 
 |                 Notifikasi                  |
 | :-----------------------------------------: |
-| ![Notifikasi](./screenshots/notifikasi.jpg) |
+| ![Notifikasi](./screenshots/notifikasi.png) |
 
 </div>
 
