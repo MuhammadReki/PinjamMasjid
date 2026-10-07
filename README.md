@@ -101,29 +101,13 @@ Aplikasi ini memiliki **3 level pengguna** dengan hak akses berbeda:
 
 <div align="center">
 
-### 🔐 Login
+|               Login               |                    Dashboard Jemaah                     |                     Dashboard Panitia                     |                      Dashboard Superadmin                       |
+| :-------------------------------: | :-----------------------------------------------------: | :-------------------------------------------------------: | :-------------------------------------------------------------: |
+| ![Login](./screenshots/login.png) | ![Dashboard Jemaah](./screenshots/dashboard-jemaah.png) | ![Dashboard Panitia](./screenshots/dashboard-panitia.png) | ![Dashboard Superadmin](./screenshots/dashboard-superadmin.png) |
 
-|               Login               |                    Dashboard Jemaah                     |
-| :-------------------------------: | :-----------------------------------------------------: |
-| ![Login](./screenshots/login.png) | ![Dashboard Jemaah](./screenshots/dashboard-jemaah.png) |
-
-### 👥 Dashboard Multi-Role
-
-|                          Panitia                          |                           Superadmin                            |
-| :-------------------------------------------------------: | :-------------------------------------------------------------: |
-| ![Dashboard Panitia](./screenshots/dashboard-panitia.png) | ![Dashboard Superadmin](./screenshots/dashboard-superadmin.png) |
-
-### 📦 Fitur Utama
-
-|            Barang Masjid            |              Pinjaman Saya              |          Approve Peminjaman           |
-| :---------------------------------: | :-------------------------------------: | :-----------------------------------: |
-| ![Barang](./screenshots/barang.png) | ![Pinjaman](./screenshots/pinjaman.png) | ![Approve](./screenshots/approve.png) |
-
-### 🔔 Notifikasi
-
-|                 Notifikasi                  |
-| :-----------------------------------------: |
-| ![Notifikasi](./screenshots/notifikasi.png) |
+|            Barang Masjid            |              Pinjaman Saya              |          Approve Peminjaman           |                 Notifikasi                  |
+| :---------------------------------: | :-------------------------------------: | :-----------------------------------: | :-----------------------------------------: |
+| ![Barang](./screenshots/barang.png) | ![Pinjaman](./screenshots/pinjaman.png) | ![Approve](./screenshots/approve.png) | ![Notifikasi](./screenshots/notifikasi.png) |
 
 </div>
 
